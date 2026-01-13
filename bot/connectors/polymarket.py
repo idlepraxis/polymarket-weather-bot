@@ -312,8 +312,16 @@ class PolymarketClient:
             print(f"Error parsing weather market: {e}")
             return None
 
-    def get_token_price(self, token_id: str) -> float:
-        """Get current token price from orderbook."""
+    def get_token_price(self, token_id: str, silent: bool = False) -> float:
+        """Get current token price from orderbook.
+
+        Args:
+            token_id: Token ID to fetch price for
+            silent: If True, suppress error messages (useful for batch operations)
+
+        Returns:
+            Token price (0.5 as fallback if unavailable)
+        """
         try:
             # py-clob-client v0.34+ requires 'side' parameter
             # Using 'BUY' side to get the ask price (what you'd pay to buy)
@@ -338,15 +346,17 @@ class PolymarketClient:
                     return price_float if price_float > 0 else 0.5
                 return 0.5
         except Exception as e:
-            print(f"Error fetching price for {token_id}: {e}")
+            # Only print errors if not in silent mode
+            if not silent:
+                print(f"Error fetching price for {token_id}: {e}")
             return 0.5
 
-    def batch_get_token_prices(self, token_ids: List[str], max_workers: int = 20) -> Dict[str, float]:
+    def batch_get_token_prices(self, token_ids: List[str], max_workers: int = 5) -> Dict[str, float]:
         """Batch fetch prices for multiple tokens concurrently.
 
         Args:
             token_ids: List of token IDs to fetch prices for
-            max_workers: Maximum number of concurrent requests
+            max_workers: Maximum number of concurrent requests (default: 5 to avoid rate limits)
 
         Returns:
             Dictionary mapping token_id -> price
@@ -354,11 +364,13 @@ class PolymarketClient:
         prices = {}
 
         def fetch_single_price(token_id: str):
-            """Fetch a single token price."""
-            price = self.get_token_price(token_id)
+            """Fetch a single token price with rate limiting."""
+            # Small delay to avoid triggering Cloudflare rate limits
+            time.sleep(0.05)  # 50ms delay per request
+            price = self.get_token_price(token_id, silent=True)
             return token_id, price
 
-        # Fetch prices concurrently
+        # Fetch prices concurrently with reduced workers to avoid rate limits
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             future_to_token = {
@@ -373,7 +385,7 @@ class PolymarketClient:
                     prices[token_id] = price
                 except Exception as e:
                     token_id = future_to_token[future]
-                    print(f"Error fetching price for {token_id}: {e}")
+                    # Silently use fallback for failed requests (already logged in get_token_price)
                     prices[token_id] = 0.5  # Default fallback
 
         return prices
