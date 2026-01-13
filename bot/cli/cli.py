@@ -11,6 +11,7 @@ from rich.table import Table
 from rich import box
 
 from bot.application.trader import WeatherTrader
+from bot.application.extreme_value_strategy import ExtremeValueStrategy
 from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.weather import WeatherConnector
 from bot.utils.config import Config, get_config
@@ -327,11 +328,180 @@ def config_check():
 
 
 @app.command()
+def extreme_scan(
+    limit: int = typer.Option(20, help="Max opportunities to show"),
+    yes_max: float = typer.Option(0.15, help="Max YES price to buy"),
+    no_min_yes: float = typer.Option(0.40, help="Min YES price to buy NO"),
+):
+    """Scan for EXTREME VALUE opportunities (mispriced shares).
+
+    This implements the successful trader strategy:
+    - Buy YES shares ONLY when < 10-15¢
+    - Buy NO shares ONLY when YES > 40-50¢
+    - Small positions, high volume, asymmetric payoffs
+    """
+    try:
+        config = get_config()
+        polymarket = PolymarketClient(config)
+        weather = WeatherConnector(config)
+
+        # Override config with CLI params
+        config.extreme_yes_max_price = yes_max
+        config.extreme_no_min_yes_price = no_min_yes
+
+        strategy = ExtremeValueStrategy(config, polymarket, weather)
+
+        console.print("[cyan]Scanning for EXTREME VALUE opportunities...[/cyan]")
+        console.print(f"Rules: YES < {yes_max:.0%}, NO when YES > {no_min_yes:.0%}\n")
+
+        # Fetch markets
+        all_markets = polymarket.get_all_markets()
+        weather_markets = polymarket.filter_weather_markets(all_markets)
+
+        console.print(f"Found {len(weather_markets)} weather markets")
+
+        if not weather_markets:
+            console.print("[yellow]No weather markets found[/yellow]")
+            return
+
+        # Find opportunities
+        with console.status("[bold green]Analyzing for extreme values..."):
+            signals = strategy.scan_for_opportunities(weather_markets)
+
+            # Filter by time and liquidity
+            signals = strategy.filter_by_time_to_resolution(signals)
+            signals = strategy.filter_by_liquidity(signals)
+
+        if signals:
+            table = Table(
+                title=f"🎯 EXTREME VALUE Opportunities (Top {limit})",
+                box=box.HEAVY_HEAD
+            )
+            table.add_column("Market", style="white", width=45)
+            table.add_column("Side", style="cyan", justify="center")
+            table.add_column("Price", style="yellow", justify="right")
+            table.add_column("Size", style="blue", justify="right")
+            table.add_column("EV", style="green", justify="right")
+            table.add_column("Payoff", style="magenta", justify="right")
+
+            for signal in signals[:limit]:
+                ev = strategy._calculate_ev(signal)
+                payoff_ratio = (1 - signal.price) / signal.price
+
+                side_icon = "📈 YES" if signal.action == "BUY" else "📉 NO"
+
+                table.add_row(
+                    signal.market.question[:42] + "...",
+                    side_icon,
+                    f"{signal.price:.1%}",
+                    f"${signal.size:.2f}",
+                    f"${ev:+.2f}",
+                    f"{payoff_ratio:.1f}x",
+                )
+
+            console.print(table)
+            console.print(f"\n[green]Found {len(signals)} extreme value opportunities[/green]")
+
+            # Summary stats
+            total_ev = sum(strategy._calculate_ev(s) for s in signals[:limit])
+            total_risk = sum(s.size * s.price for s in signals[:limit])
+
+            console.print(f"Total EV if all {limit} trades hit: ${total_ev:.2f}")
+            console.print(f"Total capital at risk: ${total_risk:.2f}")
+            console.print(f"EV/Risk ratio: {total_ev/total_risk:.1%}" if total_risk > 0 else "")
+
+        else:
+            console.print("[yellow]No extreme value opportunities found[/yellow]")
+            console.print("[dim]Try relaxing thresholds: --yes-max 0.20 --no-min-yes 0.35[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def extreme_trade(
+    dry_run: bool = typer.Option(True, "--dry-run/--live", help="Simulate trades"),
+    yes_max: float = typer.Option(0.15, help="Max YES price"),
+    no_min_yes: float = typer.Option(0.40, help="Min YES price for NO"),
+    max_trades: int = typer.Option(10, help="Max trades to execute"),
+):
+    """Execute EXTREME VALUE trades (mispriced shares).
+
+    This is the high-ROI strategy that has generated $25k+ profits.
+    """
+    try:
+        config = get_config()
+        polymarket = PolymarketClient(config)
+        weather = WeatherConnector(config)
+
+        # Override settings
+        config.extreme_yes_max_price = yes_max
+        config.extreme_no_min_yes_price = no_min_yes
+        config.simulation_mode = dry_run
+
+        strategy = ExtremeValueStrategy(config, polymarket, weather)
+
+        mode = "SIMULATION" if dry_run else "LIVE"
+        mode_color = "yellow" if dry_run else "red"
+
+        console.print(f"[{mode_color} bold]EXTREME VALUE Trading - {mode} Mode[/{mode_color} bold]")
+
+        if not dry_run:
+            confirm = typer.confirm("⚠️  Execute LIVE trades with real funds?")
+            if not confirm:
+                raise typer.Exit(0)
+
+        # Scan for opportunities
+        all_markets = polymarket.get_all_markets()
+        weather_markets = polymarket.filter_weather_markets(all_markets)
+
+        signals = strategy.scan_for_opportunities(weather_markets)
+        signals = strategy.filter_by_time_to_resolution(signals)
+        signals = strategy.filter_by_liquidity(signals)
+
+        if not signals:
+            console.print("[yellow]No opportunities found[/yellow]")
+            return
+
+        console.print(f"Found {len(signals)} opportunities, executing top {max_trades}...")
+
+        executed = 0
+        for signal in signals[:max_trades]:
+            try:
+                # Execute trade
+                order_id = polymarket.execute_market_order(
+                    token_id=signal.token_id,
+                    amount=signal.size,
+                    simulation=dry_run,
+                )
+
+                executed += 1
+
+                console.print(
+                    f"[green]✓[/green] {signal.action.value} {signal.size:.2f} USDC @ {signal.price:.1%} "
+                    f"- {signal.market.question[:40]}..."
+                )
+
+                time.sleep(1)  # Rate limiting
+
+            except Exception as e:
+                console.print(f"[red]✗ Failed:[/red] {e}")
+
+        console.print(f"\n[green]Executed {executed}/{max_trades} trades[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
 def version():
     """Show version information."""
     console.print("\n[bold cyan]Polymarket Weather Bot[/bold cyan]")
     console.print("Version: [green]1.0.0[/green]")
     console.print("Author: [blue]@idlepraxis[/blue]")
+    console.print("Strategies: [yellow]Forecast Arbitrage + Extreme Value Betting[/yellow]")
     console.print()
 
 

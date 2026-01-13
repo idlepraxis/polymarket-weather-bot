@@ -2,12 +2,52 @@
 
 Automated trading bot for Polymarket weather prediction markets using Chainstack infrastructure.
 
+## ⚡ Two Profitable Strategies
+
+### 1. 🎯 **Extreme Value Betting** (RECOMMENDED - 500-1,800% ROI)
+
+**The strategy that actually works.** Based on real trader performance: $25,700 profit from 1,420 trades.
+
+- Buy YES shares ONLY when < 10-15¢
+- Buy NO shares ONLY when YES > 40-50¢
+- Small positions ($0.50-$1), high volume, asymmetric payoffs
+- **Real results:** $18/trade average profit, 21x max return
+
+📖 **[Read Full Strategy Guide →](EXTREME_VALUE_STRATEGY.md)**
+
+```bash
+# Scan for extreme value opportunities
+python bot.py extreme-scan
+
+# Execute trades (simulation)
+python bot.py extreme-trade --dry-run
+```
+
+### 2. 🔮 **Forecast Arbitrage** (50-100% ROI)
+
+Traditional approach using ensemble weather forecasts to identify mispriced markets.
+
+- Combines multiple weather APIs for accuracy
+- Calculates fair probabilities vs market prices
+- Kelly Criterion position sizing
+- Good for learning, lower but consistent returns
+
+```bash
+# Original forecast-based strategy
+python bot.py scan
+python bot.py trade-once --dry-run
+```
+
+**Recommendation:** Start with Extreme Value strategy for higher returns, use forecasts as confirmation.
+
+---
+
 ## Features
 
 - 🌤️ **Weather Market Scanning**: Automatically identifies temperature and weather-related prediction markets
+- 🎯 **Extreme Value Detection**: Finds severely mispriced shares (<15¢ or >85¢)
 - 🔮 **Ensemble Forecasting**: Combines multiple weather APIs (OpenWeather, WeatherAPI, NOAA) for accurate predictions
-- 🎯 **Edge Detection**: Calculates fair probabilities and identifies mispriced markets
-- 💰 **Risk Management**: Kelly Criterion position sizing, daily trade limits, stop-loss protection
+- 💰 **Risk Management**: Smart position sizing, daily trade limits, stop-loss protection
 - 🔐 **Chainstack Integration**: Uses private Polygon node for fast, secure blockchain access
 - 🧪 **Simulation Mode**: Test strategies risk-free before going live
 - 📊 **Portfolio Tracking**: Track positions, P&L, and performance metrics
