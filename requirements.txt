@@ -6,8 +6,8 @@ eth-utils==2.3.1
 pycryptodome==3.19.0
 
 # Polymarket SDKs
-py-clob-client==0.22.1
-py-order-utils==0.1.6
+py-clob-client==0.34.4
+py-order-utils==0.1.13
 
 # Weather APIs
 requests==2.31.0
