@@ -198,7 +198,7 @@ class WeatherTrader:
                 reasoning=reasoning,
             )
 
-            self.logger.info(f"Signal: {signal.action.value} {market.question[:60]}... | Edge: {edge:.2%}")
+            self.logger.info(f"Signal: {signal.action} {market.question[:60]}... | Edge: {edge:.2%}")
 
             return signal
 
@@ -319,7 +319,7 @@ class WeatherTrader:
 
             mode = "SIMULATION" if self.config.simulation_mode else "LIVE"
             self.logger.info(
-                f"[{mode}] Executed trade: {signal.action.value} {signal.size} USDC "
+                f"[{mode}] Executed trade: {signal.action} {signal.size} USDC "
                 f"in {signal.market.question[:50]}... @ {signal.price:.2%}"
             )
 

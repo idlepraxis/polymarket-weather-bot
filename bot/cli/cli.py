@@ -148,7 +148,7 @@ def scan(
                 edge_color = "green" if signal.edge > 0 else "red"
                 table.add_row(
                     signal.market.question[:47] + "...",
-                    signal.action.value,
+                    signal.action,
                     f"{signal.market_probability:.1%}",
                     f"{signal.fair_probability:.1%}",
                     f"[{edge_color}]{signal.edge:+.1%}[/{edge_color}]",
@@ -479,7 +479,7 @@ def extreme_trade(
                 executed += 1
 
                 console.print(
-                    f"[green]✓[/green] {signal.action.value} {signal.size:.2f} USDC @ {signal.price:.1%} "
+                    f"[green]✓[/green] {signal.action} {signal.size:.2f} USDC @ {signal.price:.1%} "
                     f"- {signal.market.question[:40]}..."
                 )
 
