@@ -44,6 +44,15 @@ class Config(BaseSettings):
     max_daily_trades: int = Field(50, alias="MAX_DAILY_TRADES")
     max_open_positions: int = Field(20, alias="MAX_OPEN_POSITIONS")
 
+    # Extreme Value Strategy Parameters
+    extreme_yes_max_price: float = Field(0.15, alias="EXTREME_YES_MAX_PRICE")
+    extreme_yes_ideal_price: float = Field(0.10, alias="EXTREME_YES_IDEAL_PRICE")
+    extreme_no_min_yes_price: float = Field(0.40, alias="EXTREME_NO_MIN_YES_PRICE")
+    extreme_no_ideal_yes_price: float = Field(0.50, alias="EXTREME_NO_IDEAL_YES_PRICE")
+    extreme_min_position: float = Field(0.50, alias="EXTREME_MIN_POSITION")
+    extreme_max_position: float = Field(1.00, alias="EXTREME_MAX_POSITION")
+    extreme_aggressive_max: float = Field(5.00, alias="EXTREME_AGGRESSIVE_MAX")
+
     # Risk Management
     bankroll_usdc: float = Field(1000.0, alias="BANKROLL_USDC")
     position_size_pct: float = Field(0.01, alias="POSITION_SIZE_PCT")
