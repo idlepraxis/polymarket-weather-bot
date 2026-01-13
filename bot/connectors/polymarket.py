@@ -271,8 +271,31 @@ class PolymarketClient:
         try:
             # py-clob-client v0.34+ requires 'side' parameter
             # Using 'BUY' side to get the ask price (what you'd pay to buy)
-            price = self.clob_client.get_price(token_id, side="BUY")
-            return float(price) if price else 0.5  # Default to 0.5 if no price
+            price_data = self.clob_client.get_price(token_id, side="BUY")
+
+            # Debug: Print first response to understand structure
+            import sys
+            if not hasattr(sys, '_price_debug_printed'):
+                print(f"[DEBUG] Price API response type: {type(price_data)}")
+                print(f"[DEBUG] Price API response: {price_data}")
+                sys._price_debug_printed = True
+
+            # Handle different response formats
+            if isinstance(price_data, dict):
+                # Try common keys that might contain the price
+                price = (
+                    price_data.get("price") or
+                    price_data.get("ask") or
+                    price_data.get("mid") or
+                    price_data.get("value")
+                )
+                if price is None:
+                    print(f"[DEBUG] Could not find price in dict keys: {list(price_data.keys())}")
+                    return 0.5
+                return float(price)
+            else:
+                # Direct numeric value
+                return float(price_data) if price_data else 0.5
         except Exception as e:
             print(f"Error fetching price for {token_id}: {e}")
             return 0.5
