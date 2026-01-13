@@ -326,10 +326,17 @@ class PolymarketClient:
                 if price is None:
                     # Fallback to other possible keys
                     price = price_data.get("ask") or price_data.get("mid") or price_data.get("value")
-                return float(price) if price is not None else 0.5
+                if price is not None:
+                    price_float = float(price)
+                    # Prevent division by zero - if price is 0, use fallback
+                    return price_float if price_float > 0 else 0.5
+                return 0.5
             else:
                 # Direct numeric value
-                return float(price_data) if price_data else 0.5
+                if price_data:
+                    price_float = float(price_data)
+                    return price_float if price_float > 0 else 0.5
+                return 0.5
         except Exception as e:
             print(f"Error fetching price for {token_id}: {e}")
             return 0.5
@@ -346,7 +353,7 @@ class PolymarketClient:
         """
         prices = {}
 
-        def fetch_single_price(token_id: str) -> tuple[str, float]:
+        def fetch_single_price(token_id: str):
             """Fetch a single token price."""
             price = self.get_token_price(token_id)
             return token_id, price
