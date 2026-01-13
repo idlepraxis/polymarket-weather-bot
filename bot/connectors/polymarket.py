@@ -158,21 +158,45 @@ class PolymarketClient:
 
     def filter_weather_markets(self, markets: List[Dict[str, Any]]) -> List[WeatherMarket]:
         """Filter markets for weather-related predictions."""
+        # Strong weather indicators - must have at least one
         weather_keywords = [
             "temperature",
-            "rain",
-            "snow",
-            "weather",
             "celsius",
             "fahrenheit",
-            "precipitation",
-            "storm",
-            "hurricane",
-            "tornado",
-            "forecast",
+            "degrees",
             "high temp",
             "low temp",
-            "degrees",
+            "precipitation",
+            "rainfall",
+            "snowfall",
+        ]
+
+        # Sports-related exclusions
+        sports_exclusions = [
+            " vs ",
+            " vs. ",
+            " v ",
+            " v. ",
+            "over/under",
+            "o/u",
+            "spread",
+            "moneyline",
+            "point total",
+            "will win",
+            "game",
+            "match",
+            "playoff",
+        ]
+
+        # Team names that contain weather words (exclude these)
+        team_exclusions = [
+            "hurricanes",
+            "storm",
+            "heat",
+            "suns",
+            "thunder",
+            "avalanche",
+            "lightning",
         ]
 
         # First pass: Filter weather markets and collect all token IDs
@@ -184,8 +208,20 @@ class PolymarketClient:
             try:
                 question = market_data.get("question", "").lower()
 
-                # Check if market is weather-related
+                # First check: Must contain weather keywords
                 if not any(keyword in question for keyword in weather_keywords):
+                    continue
+
+                # Second check: Exclude sports markets
+                if any(exclusion in question for exclusion in sports_exclusions):
+                    continue
+
+                # Third check: If contains team names without actual weather context, exclude
+                has_team_name = any(team in question for team in team_exclusions)
+                has_temp_context = any(word in question for word in ["temperature", "degrees", "celsius", "fahrenheit"])
+
+                if has_team_name and not has_temp_context:
+                    # It's a team name, not actual weather
                     continue
 
                 # Extract token IDs
