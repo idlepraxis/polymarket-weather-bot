@@ -1,6 +1,7 @@
 """Polymarket connector using Chainstack node and CLOB API."""
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -174,7 +175,10 @@ class PolymarketClient:
             "degrees",
         ]
 
-        weather_markets = []
+        # First pass: Filter weather markets and collect all token IDs
+        import json
+        weather_market_data = []
+        all_token_ids = []
 
         for market_data in markets:
             try:
@@ -184,19 +188,57 @@ class PolymarketClient:
                 if not any(keyword in question for keyword in weather_keywords):
                     continue
 
-                # Parse market data
-                weather_market = self._parse_weather_market(market_data)
+                # Extract token IDs
+                clob_token_ids_str = market_data.get("clobTokenIds")
+                if not clob_token_ids_str:
+                    continue
+
+                try:
+                    clob_token_ids = json.loads(clob_token_ids_str)
+                    if not isinstance(clob_token_ids, list) or len(clob_token_ids) < 2:
+                        continue
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                # Collect token IDs for batch fetching
+                all_token_ids.extend(clob_token_ids[:2])  # YES and NO tokens
+                weather_market_data.append(market_data)
+
+            except Exception as e:
+                print(f"Error filtering market: {e}")
+                continue
+
+        # Batch fetch all prices concurrently (MUCH FASTER!)
+        print(f"Fetching prices for {len(all_token_ids)} tokens concurrently...")
+        price_cache = self.batch_get_token_prices(all_token_ids)
+
+        # Second pass: Parse markets using cached prices
+        weather_markets = []
+        for market_data in weather_market_data:
+            try:
+                weather_market = self._parse_weather_market(market_data, price_cache=price_cache)
                 if weather_market:
                     weather_markets.append(weather_market)
-
             except Exception as e:
                 print(f"Error parsing market: {e}")
                 continue
 
         return weather_markets
 
-    def _parse_weather_market(self, market_data: Dict[str, Any]) -> Optional[WeatherMarket]:
-        """Parse raw market data into WeatherMarket model."""
+    def _parse_weather_market(
+        self,
+        market_data: Dict[str, Any],
+        price_cache: Optional[Dict[str, float]] = None
+    ) -> Optional[WeatherMarket]:
+        """Parse raw market data into WeatherMarket model.
+
+        Args:
+            market_data: Raw market data from API
+            price_cache: Optional cache of token prices (for batch processing)
+
+        Returns:
+            Parsed WeatherMarket or None if parsing fails
+        """
         try:
             import json
             from datetime import datetime
@@ -217,9 +259,13 @@ class PolymarketClient:
             yes_token_id = clob_token_ids[0]
             no_token_id = clob_token_ids[1]
 
-            # Get prices from orderbook
-            yes_price = self.get_token_price(yes_token_id)
-            no_price = self.get_token_price(no_token_id)
+            # Get prices from cache or fetch individually
+            if price_cache is not None:
+                yes_price = price_cache.get(yes_token_id, 0.5)
+                no_price = price_cache.get(no_token_id, 0.5)
+            else:
+                yes_price = self.get_token_price(yes_token_id)
+                no_price = self.get_token_price(no_token_id)
 
             # Parse end date - use endDateIso or endDate
             end_date_str = market_data.get("endDateIso") or market_data.get("endDate")
@@ -287,6 +333,43 @@ class PolymarketClient:
         except Exception as e:
             print(f"Error fetching price for {token_id}: {e}")
             return 0.5
+
+    def batch_get_token_prices(self, token_ids: List[str], max_workers: int = 20) -> Dict[str, float]:
+        """Batch fetch prices for multiple tokens concurrently.
+
+        Args:
+            token_ids: List of token IDs to fetch prices for
+            max_workers: Maximum number of concurrent requests
+
+        Returns:
+            Dictionary mapping token_id -> price
+        """
+        prices = {}
+
+        def fetch_single_price(token_id: str) -> tuple[str, float]:
+            """Fetch a single token price."""
+            price = self.get_token_price(token_id)
+            return token_id, price
+
+        # Fetch prices concurrently
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_token = {
+                executor.submit(fetch_single_price, token_id): token_id
+                for token_id in token_ids
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_token):
+                try:
+                    token_id, price = future.result()
+                    prices[token_id] = price
+                except Exception as e:
+                    token_id = future_to_token[future]
+                    print(f"Error fetching price for {token_id}: {e}")
+                    prices[token_id] = 0.5  # Default fallback
+
+        return prices
 
     def get_orderbook(self, token_id: str) -> Dict[str, Any]:
         """Get full orderbook for a token."""
