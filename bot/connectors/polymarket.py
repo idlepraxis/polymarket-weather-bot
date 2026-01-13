@@ -126,9 +126,7 @@ class PolymarketClient:
 
         while True:
             params = {
-                "active": True,
-                "closed": False,
-                "archived": False,
+                "closed": False,  # Only get open markets
                 "limit": limit,
                 "offset": offset,
             }
@@ -200,43 +198,64 @@ class PolymarketClient:
     def _parse_weather_market(self, market_data: Dict[str, Any]) -> Optional[WeatherMarket]:
         """Parse raw market data into WeatherMarket model."""
         try:
-            # Extract token IDs from outcomes
-            tokens = market_data.get("tokens", [])
-            if len(tokens) < 2:
-                return None
-
-            yes_token = tokens[0]
-            no_token = tokens[1]
-
-            # Get prices from orderbook
-            yes_price = self.get_token_price(yes_token["token_id"])
-            no_price = self.get_token_price(no_token["token_id"])
-
-            # Parse end date
-            end_date_str = market_data.get("end_date_iso")
+            import json
             from datetime import datetime
 
-            end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+            # Extract token IDs from clobTokenIds (it's a JSON string)
+            clob_token_ids_str = market_data.get("clobTokenIds")
+            if not clob_token_ids_str:
+                return None
+
+            try:
+                clob_token_ids = json.loads(clob_token_ids_str)
+                if not isinstance(clob_token_ids, list) or len(clob_token_ids) < 2:
+                    return None
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+            # First token is usually YES, second is NO
+            yes_token_id = clob_token_ids[0]
+            no_token_id = clob_token_ids[1]
+
+            # Get prices from orderbook
+            yes_price = self.get_token_price(yes_token_id)
+            no_price = self.get_token_price(no_token_id)
+
+            # Parse end date - use endDateIso or endDate
+            end_date_str = market_data.get("endDateIso") or market_data.get("endDate")
+            if not end_date_str:
+                return None
+
+            if isinstance(end_date_str, str):
+                end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+            else:
+                end_date = datetime.fromisoformat(str(end_date_str))
 
             # Extract location and threshold from question
             question = market_data.get("question", "")
+            if not question:
+                return None
+
             location = self._extract_location(question)
             temp_threshold = self._extract_temperature(question)
 
+            # Get condition ID
+            condition_id = market_data.get("conditionId", "")
+
             return WeatherMarket(
-                market_id=market_data.get("id", ""),
-                condition_id=market_data.get("condition_id", ""),
+                market_id=str(market_data.get("id", "")),
+                condition_id=condition_id,
                 question=question,
                 description=market_data.get("description"),
-                yes_token_id=yes_token["token_id"],
-                no_token_id=no_token["token_id"],
+                yes_token_id=yes_token_id,
+                no_token_id=no_token_id,
                 yes_price=yes_price,
                 no_price=no_price,
                 spread=abs(yes_price + no_price - 1.0),
                 status=MarketStatus.ACTIVE,
                 end_date=end_date,
-                liquidity=float(market_data.get("liquidity", 0)),
-                volume=float(market_data.get("volume", 0)),
+                liquidity=float(market_data.get("liquidityNum", 0) or market_data.get("liquidity", 0) or 0),
+                volume=float(market_data.get("volumeNum", 0) or market_data.get("volume", 0) or 0),
                 location=location,
                 temperature_threshold=temp_threshold,
                 weather_type=self._extract_weather_type(question),
