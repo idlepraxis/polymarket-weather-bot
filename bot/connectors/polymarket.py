@@ -9,7 +9,18 @@ from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import OrderArgs, MarketOrderArgs, OrderType
 from tenacity import retry, stop_after_attempt, wait_exponential
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+
+# Handle different web3.py versions
+try:
+    from web3.middleware import geth_poa_middleware
+except ImportError:
+    # web3.py v6+ uses ExtraDataToPOAMiddleware
+    try:
+        from web3.middleware import ExtraDataToPOAMiddleware
+        geth_poa_middleware = ExtraDataToPOAMiddleware
+    except ImportError:
+        # If neither works, define a no-op middleware
+        geth_poa_middleware = lambda make_request, web3: make_request
 
 from bot.utils.config import Config
 from bot.utils.models import WeatherMarket, MarketStatus
@@ -27,12 +38,22 @@ class PolymarketClient:
         """Initialize Web3 connection to Chainstack Polygon node."""
         # Primary: HTTP RPC
         self.web3 = Web3(Web3.HTTPProvider(self.config.chainstack_rpc_url))
-        self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+        # Inject POA middleware for Polygon (if available)
+        try:
+            if callable(geth_poa_middleware):
+                self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        except Exception as e:
+            print(f"Warning: Could not inject POA middleware: {e}")
 
         # WebSocket for real-time events (optional, for monitoring)
         try:
             self.web3_ws = Web3(Web3.WebsocketProvider(self.config.chainstack_ws_url))
-            self.web3_ws.middleware_onion.inject(geth_poa_middleware, layer=0)
+            try:
+                if callable(geth_poa_middleware):
+                    self.web3_ws.middleware_onion.inject(geth_poa_middleware, layer=0)
+            except:
+                pass
         except Exception as e:
             print(f"Warning: WebSocket connection failed: {e}")
             self.web3_ws = None
