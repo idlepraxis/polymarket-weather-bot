@@ -101,7 +101,7 @@ class TradeSignal(BaseModel):
     """Trading signal with analysis."""
 
     market: WeatherMarket = Field(..., description="Target market")
-    forecast: WeatherForecast = Field(..., description="Weather forecast")
+    forecast: Optional[WeatherForecast] = Field(None, description="Weather forecast (optional for extreme value strategy)")
 
     # Analysis
     fair_probability: float = Field(..., ge=0.0, le=1.0, description="Computed fair probability")

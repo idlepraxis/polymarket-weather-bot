@@ -269,7 +269,9 @@ class PolymarketClient:
     def get_token_price(self, token_id: str) -> float:
         """Get current token price from orderbook."""
         try:
-            price = self.clob_client.get_price(token_id)
+            # py-clob-client v0.34+ requires 'side' parameter
+            # Using 'BUY' side to get the ask price (what you'd pay to buy)
+            price = self.clob_client.get_price(token_id, side="BUY")
             return float(price) if price else 0.5  # Default to 0.5 if no price
         except Exception as e:
             print(f"Error fetching price for {token_id}: {e}")
