@@ -7,9 +7,9 @@ from bot.utils.config import Config
 config = Config()
 client = KalshiClient(config)
 
-# Try specific ticker patterns that might exist for temperature
-print("Testing specific series tickers...")
-test_series = ["HIGHNY", "LOWNY", "HIGHSF", "LOWSF", "TEMP", "WEATHER", "CLIMATE"]
+# Try specific series with city codes (pattern: KXHIGH{CITY}, KXLOW{CITY})
+print("Testing series tickers with city codes...")
+test_series = ["KXHIGHTSEA", "KXLOWTSEA", "KXHIGHTNYC", "KXLOWTNYC", "KXHIGHTSFO", "KXLOWTSFO"]
 
 for series in test_series:
     response = client._make_request("GET", "/markets", params={"series_ticker": series, "limit": 10})
@@ -18,8 +18,9 @@ for series in test_series:
         markets = data.get("markets", [])
         if markets:
             print(f"\n✓ Found {len(markets)} markets for series: {series}")
-            for m in markets[:2]:
-                print(f"  - {m.get('ticker')}: {m.get('title', '')[:80]}")
+            for m in markets[:3]:
+                print(f"  - {m.get('ticker')}: {m.get('title', '')[:100]}")
+                print(f"    Status: {m.get('status')}")
 
 print("\n" + "="*80)
 print("Searching first 2000 markets by ticker pattern...")
@@ -29,9 +30,9 @@ if response and response.status_code == 200:
     data = response.json()
     markets = data.get("markets", [])
 
-    # Look for ticker patterns
-    temp_tickers = [m for m in markets if m.get("ticker", "").startswith(("HIGH", "LOW", "TEMP", "KXHIGH", "KXLOW"))]
-    print(f"Found {len(temp_tickers)} markets with HIGH/LOW/TEMP ticker prefix")
+    # Look for ticker patterns with city codes
+    temp_tickers = [m for m in markets if m.get("ticker", "").upper().startswith(("KXHIGHT", "KXLOWT"))]
+    print(f"Found {len(temp_tickers)} markets with KXHIGHT*/KXLOWT* ticker prefix")
 
     for i, m in enumerate(temp_tickers[:10], 1):
         print(f"\n{i}. {m.get('ticker')}")
