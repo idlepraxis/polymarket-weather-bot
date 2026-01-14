@@ -535,17 +535,25 @@ class KalshiClient:
             List of parsed WeatherMarket objects
         """
         weather_markets = []
+        skipped_count = 0
+        total_count = len(markets)
+
+        self.logger.info(f"Parsing {total_count} raw markets...")
 
         for market_data in markets:
             try:
                 weather_market = self._parse_weather_market(market_data)
                 if weather_market:
                     weather_markets.append(weather_market)
+                else:
+                    skipped_count += 1
 
             except Exception as e:
                 self.logger.error(f"Error parsing market: {e}")
+                skipped_count += 1
                 continue
 
+        self.logger.info(f"Parsing complete: {len(weather_markets)} passed, {skipped_count} skipped")
         return weather_markets
 
     def _parse_weather_market(self, market_data: Dict[str, Any]) -> Optional[WeatherMarket]:
@@ -589,7 +597,8 @@ class KalshiClient:
             from datetime import timezone
             now = datetime.now(timezone.utc)
             if end_date < now:
-                self.logger.debug(f"Skipping {ticker}: end_date={end_date} is in the past (now={now})")
+                # Temporarily use INFO to see why markets are filtered
+                self.logger.info(f"  ⊗ Skipping {ticker}: market closed at {end_date}")
                 return None  # Market already closed
 
             # Extract location and threshold
@@ -604,12 +613,12 @@ class KalshiClient:
             # Status - skip if not open/active
             status_str = market_data.get("status", "").lower()
             if status_str not in ["open", "active"]:
-                self.logger.debug(f"Skipping {ticker}: status={status_str}")
+                self.logger.info(f"  ⊗ Skipping {ticker}: status={status_str}")
                 return None  # Skip closed/settled markets
 
             status = MarketStatus.ACTIVE
 
-            self.logger.debug(f"✓ Parsed market: {ticker} | {question[:50]}... | YES: {yes_price:.2f}, NO: {no_price:.2f}")
+            self.logger.info(f"  ✓ {ticker}: YES {yes_price:.0%}, NO {no_price:.0%}")
 
             return WeatherMarket(
                 market_id=ticker,  # Use ticker as market_id
