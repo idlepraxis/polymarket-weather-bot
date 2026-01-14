@@ -3,28 +3,38 @@
 
 from bot.connectors.kalshi import KalshiClient
 from bot.utils.config import Config
-import json
 
 config = Config()
 client = KalshiClient(config)
 
-print("Fetching 20 open markets...")
-response = client._make_request("GET", "/markets", params={"limit": 20, "status": "open"})
+print("1. Trying category=climate filter...")
+response = client._make_request("GET", "/markets", params={"limit": 100, "status": "open", "category": "climate"})
+
+if response and response.status_code == 200:
+    data = response.json()
+    markets = data.get("markets", [])
+    print(f"Found {len(markets)} climate markets")
+
+    for i, market in enumerate(markets[:5], 1):
+        print(f"\n{i}. {market.get('ticker', 'N/A')}")
+        print(f"   {market.get('title', 'N/A')[:100]}")
+else:
+    print(f"Failed: {response.status_code if response else 'No response'}")
+
+print("\n" + "="*80)
+print("2. Searching 500 markets for 'temperature' keyword...")
+response = client._make_request("GET", "/markets", params={"limit": 500, "status": "open"})
 
 if response and response.status_code == 200:
     data = response.json()
     markets = data.get("markets", [])
 
-    print(f"\nFound {len(markets)} markets")
-    print("\n" + "="*80)
+    temp_markets = [m for m in markets if "temp" in m.get("title", "").lower() or "temperature" in m.get("title", "").lower()]
+    print(f"Found {len(temp_markets)} temperature markets out of {len(markets)} total")
 
-    for i, market in enumerate(markets[:10], 1):
-        print(f"\n{i}. Ticker: {market.get('ticker', 'N/A')}")
-        print(f"   Title: {market.get('title', 'N/A')}")
-        print(f"   Category: {market.get('category', 'N/A')}")
+    for i, market in enumerate(temp_markets[:5], 1):
+        print(f"\n{i}. {market.get('ticker', 'N/A')}")
+        print(f"   {market.get('title', 'N/A')[:100]}")
         print(f"   Series: {market.get('series_ticker', 'N/A')}")
-
 else:
-    print(f"Error: {response.status_code if response else 'No response'}")
-    if response:
-        print(response.text[:500])
+    print(f"Failed: {response.status_code if response else 'No response'}")
