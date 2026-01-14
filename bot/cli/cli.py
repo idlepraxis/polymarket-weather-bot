@@ -371,8 +371,14 @@ def extreme_scan(
         console.print(f"Rules: YES < {yes_max:.0%}, NO when YES > {no_min_yes:.0%}\n")
 
         # Fetch markets
-        all_markets = client.get_all_markets()
-        weather_markets = client.filter_weather_markets(all_markets)
+        with console.status(f"[bold green]Fetching {platform_name} markets..."):
+            # For Kalshi, limit to 1000 markets to avoid scanning thousands
+            # For Polymarket, fetch all (already optimized)
+            if platform.lower() == "kalshi":
+                all_markets = client.get_all_markets(limit=200, max_total=1000)
+            else:
+                all_markets = client.get_all_markets()
+            weather_markets = client.filter_weather_markets(all_markets)
 
         console.print(f"Found {len(weather_markets)} weather markets")
 
@@ -477,8 +483,12 @@ def extreme_trade(
                 raise typer.Exit(0)
 
         # Scan for opportunities
-        all_markets = client.get_all_markets()
-        weather_markets = client.filter_weather_markets(all_markets)
+        with console.status(f"[bold green]Fetching {platform_name} markets..."):
+            if platform.lower() == "kalshi":
+                all_markets = client.get_all_markets(limit=200, max_total=1000)
+            else:
+                all_markets = client.get_all_markets()
+            weather_markets = client.filter_weather_markets(all_markets)
 
         signals = strategy.scan_for_opportunities(weather_markets)
         signals = strategy.filter_by_time_to_resolution(signals)

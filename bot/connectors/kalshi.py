@@ -290,11 +290,12 @@ class KalshiClient:
             self.logger.error(f"Error fetching balance: {e}")
             return 0.0
 
-    def get_all_markets(self, limit: int = 200) -> List[Dict[str, Any]]:
+    def get_all_markets(self, limit: int = 200, max_total: int = 1000) -> List[Dict[str, Any]]:
         """Fetch all active markets from Kalshi API.
 
         Args:
             limit: Max markets per request (default 200)
+            max_total: Max total markets to fetch across all requests (default 1000)
 
         Returns:
             List of market dictionaries
@@ -302,10 +303,10 @@ class KalshiClient:
         all_markets = []
         cursor = None
 
-        while True:
+        while len(all_markets) < max_total:
             try:
                 params = {
-                    "limit": limit,
+                    "limit": min(limit, max_total - len(all_markets)),
                     "status": "open",  # Only get open markets
                 }
 
@@ -325,6 +326,7 @@ class KalshiClient:
                     break
 
                 all_markets.extend(markets)
+                self.logger.info(f"Fetched {len(all_markets)} markets so far...")
 
                 # Check for pagination
                 cursor = data.get("cursor")
