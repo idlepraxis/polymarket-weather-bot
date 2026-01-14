@@ -342,41 +342,21 @@ class KalshiClient:
         return all_markets
 
     def _discover_weather_series(self) -> List[str]:
-        """Get known temperature series tickers.
+        """Get temperature series tickers with city codes.
 
         Returns:
-            List of series ticker strings for high/low temperature markets
+            List of series ticker strings like KXHIGHTSEA, KXLOWTNYC
         """
-        # Try fetching first to see what series exist
-        try:
-            response = self._make_request("GET", "/markets", params={"limit": 200, "status": "open"})
-            if response and response.status_code == 200:
-                data = response.json()
-                markets = data.get("markets", [])
+        # Major US cities - pattern is KXHIGHT{CITY} and KXLOWT{CITY}
+        cities = ["SEA", "NYC", "SFO", "LAX", "CHI", "BOS", "MIA", "DEN", "ATL", "PHX"]
 
-                # Extract unique series from market tickers
-                series_set = set()
-                for m in markets:
-                    ticker = m.get("ticker", "")
-                    # Series is usually before the first dash
-                    if "-" in ticker:
-                        series = ticker.split("-")[0]
-                        title = m.get("title", "").lower()
-                        if ("temp" in title or "temperature" in title) and ("high" in title or "low" in title):
-                            series_set.add(series)
-                            self.logger.info(f"Found temp series from market: {series} ({m.get('title', '')[:50]})")
+        series = []
+        for city in cities:
+            series.append(f"KXHIGHT{city}")
+            series.append(f"KXLOWT{city}")
 
-                if series_set:
-                    result = list(series_set)
-                    self.logger.info(f"Discovered {len(result)} temperature series from markets: {result}")
-                    return result
-        except Exception as e:
-            self.logger.warning(f"Could not discover series from markets: {e}")
-
-        # Fallback to known patterns
-        known_patterns = ["KXHIGH", "KXLOW", "KCHIGH", "KCLOW"]
-        self.logger.info(f"Using fallback temperature series patterns: {known_patterns}")
-        return known_patterns
+        self.logger.info(f"Using temperature series for {len(cities)} cities: {series[:6]}...")
+        return series
 
     def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
         """Fetch weather markets directly using series discovery and series_ticker API parameter.
