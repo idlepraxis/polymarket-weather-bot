@@ -378,8 +378,13 @@ class KalshiClient:
                     markets = data.get("markets", [])
                     all_weather_markets.extend(markets)
                     self.logger.info(f"  Found {len(markets)} {series} markets")
+
+                    # Debug: Show response structure if empty
+                    if len(markets) == 0:
+                        self.logger.debug(f"  Response keys: {list(data.keys())}")
+                        self.logger.debug(f"  Cursor: {data.get('cursor')}")
                 else:
-                    self.logger.warning(f"  Error fetching {series}: {response.status_code}")
+                    self.logger.warning(f"  Error fetching {series}: {response.status_code} - {response.text}")
 
                 time.sleep(0.2)  # Rate limiting
 
@@ -387,7 +392,60 @@ class KalshiClient:
                 self.logger.error(f"Error fetching {series} markets: {e}")
                 continue
 
+        # If no weather markets found via series, fall back to keyword search
+        if len(all_weather_markets) == 0:
+            self.logger.warning("No weather markets found via series_ticker, falling back to keyword search...")
+            return self._fallback_weather_search(limit=500)
+
         return all_weather_markets
+
+    def _fallback_weather_search(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """Fallback: Search for weather markets using keyword filtering.
+
+        Args:
+            limit: Max markets to fetch
+
+        Returns:
+            List of weather market dictionaries
+        """
+        weather_keywords = [
+            "temperature", "temp", "degrees", "fahrenheit", "celsius",
+            "high", "low", "precipitation", "rain", "snow", "weather"
+        ]
+
+        self.logger.info(f"Fetching {limit} markets for keyword search...")
+
+        try:
+            params = {
+                "limit": limit,
+                "status": "open",
+            }
+
+            response = self._make_request("GET", "/markets", params=params)
+
+            if response.status_code != 200:
+                self.logger.error(f"Error fetching markets: {response.status_code}")
+                return []
+
+            data = response.json()
+            all_markets = data.get("markets", [])
+
+            # Filter for weather keywords
+            weather_markets = []
+            for market in all_markets:
+                title = market.get("title", "").lower()
+                subtitle = market.get("subtitle", "").lower()
+                event_ticker = market.get("event_ticker", "").lower()
+
+                if any(keyword in title or keyword in subtitle or keyword in event_ticker for keyword in weather_keywords):
+                    weather_markets.append(market)
+
+            self.logger.info(f"Found {len(weather_markets)} weather markets via keyword search")
+            return weather_markets
+
+        except Exception as e:
+            self.logger.error(f"Error in fallback search: {e}")
+            return []
 
     def filter_weather_markets(self, markets: List[Dict[str, Any]]) -> List[WeatherMarket]:
         """Filter markets for weather-related predictions.
