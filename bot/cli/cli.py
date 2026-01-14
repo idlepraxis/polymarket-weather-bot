@@ -372,13 +372,14 @@ def extreme_scan(
 
         # Fetch markets
         with console.status(f"[bold green]Fetching {platform_name} markets..."):
-            # For Kalshi, limit to 1000 markets to avoid scanning thousands
-            # For Polymarket, fetch all (already optimized)
+            # For Kalshi, use direct weather series fetching (much faster)
+            # For Polymarket, fetch all and filter (already optimized)
             if platform.lower() == "kalshi":
-                all_markets = client.get_all_markets(limit=200, max_total=1000)
+                all_markets = client.get_weather_markets_direct(limit=200)
+                weather_markets = client.filter_weather_markets(all_markets)
             else:
                 all_markets = client.get_all_markets()
-            weather_markets = client.filter_weather_markets(all_markets)
+                weather_markets = client.filter_weather_markets(all_markets)
 
         console.print(f"Found {len(weather_markets)} weather markets")
 
@@ -485,10 +486,11 @@ def extreme_trade(
         # Scan for opportunities
         with console.status(f"[bold green]Fetching {platform_name} markets..."):
             if platform.lower() == "kalshi":
-                all_markets = client.get_all_markets(limit=200, max_total=1000)
+                all_markets = client.get_weather_markets_direct(limit=200)
+                weather_markets = client.filter_weather_markets(all_markets)
             else:
                 all_markets = client.get_all_markets()
-            weather_markets = client.filter_weather_markets(all_markets)
+                weather_markets = client.filter_weather_markets(all_markets)
 
         signals = strategy.scan_for_opportunities(weather_markets)
         signals = strategy.filter_by_time_to_resolution(signals)

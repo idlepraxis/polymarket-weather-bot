@@ -341,6 +341,54 @@ class KalshiClient:
 
         return all_markets
 
+    def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Fetch weather markets directly using series_ticker API parameter.
+
+        This is much more efficient than fetching all markets and filtering.
+
+        Args:
+            limit: Max markets per series (default 200)
+
+        Returns:
+            List of weather market dictionaries
+        """
+        # Weather series on Kalshi
+        weather_series = [
+            "KXHIGH",  # High temperature series
+            "KXLOW",   # Low temperature series
+            "KXRAIN",  # Rainfall series
+            "KXSNOW",  # Snowfall series
+        ]
+
+        all_weather_markets = []
+
+        for series in weather_series:
+            try:
+                self.logger.info(f"Fetching {series} markets...")
+                params = {
+                    "limit": limit,
+                    "status": "open",
+                    "series_ticker": series,
+                }
+
+                response = self._make_request("GET", "/markets", params=params)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    markets = data.get("markets", [])
+                    all_weather_markets.extend(markets)
+                    self.logger.info(f"  Found {len(markets)} {series} markets")
+                else:
+                    self.logger.warning(f"  Error fetching {series}: {response.status_code}")
+
+                time.sleep(0.2)  # Rate limiting
+
+            except Exception as e:
+                self.logger.error(f"Error fetching {series} markets: {e}")
+                continue
+
+        return all_weather_markets
+
     def filter_weather_markets(self, markets: List[Dict[str, Any]]) -> List[WeatherMarket]:
         """Filter markets for weather-related predictions.
 
@@ -353,66 +401,16 @@ class KalshiClient:
         Returns:
             List of parsed WeatherMarket objects
         """
-        # Weather-related series/tickers
-        weather_series = [
-            "KXHIGH",  # High temperature series
-            "KXLOW",   # Low temperature series
-            "KXRAIN",  # Rainfall series
-            "KXSNOW",  # Snowfall series
-            "KXTEMP",  # Temperature series
-        ]
-
-        # Weather keywords
-        weather_keywords = [
-            "temperature",
-            "celsius",
-            "fahrenheit",
-            "degrees",
-            "high temp",
-            "low temp",
-            "precipitation",
-            "rainfall",
-            "snowfall",
-            "rain",
-            "snow",
-        ]
-
         weather_markets = []
-
-        # Debug: Log first market to see structure
-        if markets and len(markets) > 0:
-            self.logger.info(f"Sample market structure: {markets[0]}")
 
         for market_data in markets:
             try:
-                ticker = market_data.get("ticker", "")
-                title = market_data.get("title", "").lower()
-                subtitle = market_data.get("subtitle", "").lower()
-                category = market_data.get("category", "").lower()
-
-                # Check if it's a weather series
-                is_weather_series = any(series in ticker.upper() for series in weather_series)
-
-                # Check if category is climate/weather
-                is_weather_category = "climate" in category or "weather" in category
-
-                # Check if title/subtitle contains weather keywords
-                has_weather_keywords = any(
-                    keyword in title or keyword in subtitle
-                    for keyword in weather_keywords
-                )
-
-                # Debug: Log any potential matches
-                if is_weather_series or is_weather_category or has_weather_keywords:
-                    self.logger.info(f"Found potential weather market: {ticker} - {title}")
-                    weather_market = self._parse_weather_market(market_data)
-                    if weather_market:
-                        weather_markets.append(weather_market)
-                    else:
-                        self.logger.warning(f"Failed to parse weather market: {ticker}")
+                weather_market = self._parse_weather_market(market_data)
+                if weather_market:
+                    weather_markets.append(weather_market)
 
             except Exception as e:
-                self.logger.error(f"Error filtering market: {e}")
+                self.logger.error(f"Error parsing market: {e}")
                 continue
 
         return weather_markets
