@@ -167,10 +167,14 @@ class KalshiClient:
         # Generate timestamp in milliseconds
         timestamp_ms = str(int(time.time() * 1000))
 
-        # Strip query parameters from path for signing
-        path_for_signing = path.split('?')[0]
+        # Construct full path including API version for signing
+        # Kalshi requires signing the FULL path including /trade-api/v2
+        full_path = f"/trade-api/v2{path}"
 
-        # Sign the request
+        # Strip query parameters from path for signing
+        path_for_signing = full_path.split('?')[0]
+
+        # Sign the request with the full path
         signature = self._sign_request(timestamp_ms, method.upper(), path_for_signing)
 
         # Set headers for signed request
