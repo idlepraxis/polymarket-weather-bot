@@ -546,8 +546,9 @@ class KalshiClient:
 
             # SIMPLE FILTER: Only high/low temperature markets
             question_lower = question.lower()
-            is_high_temp = "high" in question_lower and ("temp" in question_lower or "temperature" in question_lower)
-            is_low_temp = "low" in question_lower and ("temp" in question_lower or "temperature" in question_lower)
+            has_temp = "temp" in question_lower or "temperature" in question_lower
+            is_high_temp = has_temp and ("high" in question_lower or "maximum" in question_lower)
+            is_low_temp = has_temp and ("low" in question_lower or "minimum" in question_lower)
 
             if not (is_high_temp or is_low_temp):
                 return None  # Skip non-temperature markets
