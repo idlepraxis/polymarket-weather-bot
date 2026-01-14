@@ -585,6 +585,11 @@ class KalshiClient:
             # Kalshi uses ISO 8601 format
             end_date = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
 
+            # Skip markets that have already closed
+            from datetime import timezone
+            if end_date < datetime.now(timezone.utc):
+                return None  # Market already closed
+
             # Extract location and threshold
             location = self._extract_location(question)
             temp_threshold = self._extract_temperature(question)
@@ -594,9 +599,12 @@ class KalshiClient:
             liquidity = market_data.get("liquidity", 0)  # open_interest can be used as proxy
             open_interest = market_data.get("open_interest", 0)
 
-            # Status
-            status_str = market_data.get("status", "open")
-            status = MarketStatus.ACTIVE if status_str == "open" else MarketStatus.CLOSED
+            # Status - skip if not open
+            status_str = market_data.get("status", "").lower()
+            if status_str != "open":
+                return None  # Skip closed/settled markets
+
+            status = MarketStatus.ACTIVE
 
             return WeatherMarket(
                 market_id=ticker,  # Use ticker as market_id
