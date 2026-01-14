@@ -352,41 +352,65 @@ class KalshiClient:
             params = {"category": "climate"}
             response = self._make_request("GET", "/series", params=params)
 
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 data = response.json()
-                series_list = data.get("series", [])
-                tickers = [s.get("ticker") for s in series_list if s.get("ticker")]
-                self.logger.info(f"Found {len(tickers)} climate series via category filter")
-                if tickers:
-                    return tickers
+                if data and isinstance(data, dict):
+                    series_list = data.get("series", [])
+                    if series_list and isinstance(series_list, list):
+                        tickers = [s.get("ticker") for s in series_list if isinstance(s, dict) and s.get("ticker")]
+                        self.logger.info(f"Found {len(tickers)} climate series via category filter: {tickers}")
+                        if tickers:
+                            return tickers
+                    else:
+                        self.logger.warning(f"No 'series' list in response. Response keys: {list(data.keys())}")
+            else:
+                status = response.status_code if response else "No response"
+                self.logger.warning(f"Climate category request failed: {status}")
 
             # Fallback: Get all series and filter by keywords
             self.logger.info("Trying to fetch all series and filter...")
             response = self._make_request("GET", "/series")
 
-            if response.status_code != 200:
-                self.logger.error(f"Error fetching series: {response.status_code}")
+            if not response or response.status_code != 200:
+                status = response.status_code if response else "No response"
+                self.logger.error(f"Error fetching all series: {status}")
                 return []
 
             data = response.json()
+            if not data or not isinstance(data, dict):
+                self.logger.error(f"Invalid series response: {data}")
+                return []
+
             series_list = data.get("series", [])
+            if not series_list or not isinstance(series_list, list):
+                self.logger.error(f"No series list in response. Keys: {list(data.keys())}")
+                return []
+
+            self.logger.info(f"Fetched {len(series_list)} total series, filtering for climate/weather...")
 
             # Filter by weather/climate keywords
             weather_keywords = ["climate", "weather", "temperature", "temp", "rain", "snow", "precipitation"]
             weather_series = []
 
             for series in series_list:
+                if not isinstance(series, dict):
+                    continue
+
                 ticker = series.get("ticker", "")
                 title = series.get("title", "").lower()
                 category = series.get("category", "").lower()
 
                 if any(keyword in title or keyword in category for keyword in weather_keywords):
                     weather_series.append(ticker)
+                    self.logger.debug(f"Found climate series: {ticker} - {series.get('title')}")
 
+            self.logger.info(f"Filtered to {len(weather_series)} climate series: {weather_series}")
             return weather_series
 
         except Exception as e:
+            import traceback
             self.logger.error(f"Error discovering weather series: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return []
 
     def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
