@@ -379,6 +379,10 @@ class KalshiClient:
 
         weather_markets = []
 
+        # Debug: Log first market to see structure
+        if markets and len(markets) > 0:
+            self.logger.info(f"Sample market structure: {markets[0]}")
+
         for market_data in markets:
             try:
                 ticker = market_data.get("ticker", "")
@@ -398,10 +402,14 @@ class KalshiClient:
                     for keyword in weather_keywords
                 )
 
+                # Debug: Log any potential matches
                 if is_weather_series or is_weather_category or has_weather_keywords:
+                    self.logger.info(f"Found potential weather market: {ticker} - {title}")
                     weather_market = self._parse_weather_market(market_data)
                     if weather_market:
                         weather_markets.append(weather_market)
+                    else:
+                        self.logger.warning(f"Failed to parse weather market: {ticker}")
 
             except Exception as e:
                 self.logger.error(f"Error filtering market: {e}")
