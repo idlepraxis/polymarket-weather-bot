@@ -1,5 +1,6 @@
 """Kalshi connector for weather prediction markets."""
 
+import base64
 import hashlib
 import hmac
 import time
@@ -9,6 +10,14 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
+
+try:
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.backends import default_backend
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
 
 from bot.utils.config import Config
 from bot.utils.logger import get_logger
@@ -30,13 +39,14 @@ class KalshiClient:
 
         # Authentication credentials
         self.api_key_id = config.kalshi_api_key_id
-        self.api_private_key = config.kalshi_api_private_key
+        self.api_private_key_pem = config.kalshi_api_private_key
         self.email = config.kalshi_email
         self.password = config.kalshi_password
 
         self.token = None
         self.token_expiry = None
         self.auth_method = None
+        self.private_key = None  # Loaded RSA private key object
 
         # HTTP client with persistent session
         self.client = httpx.Client(timeout=30.0)
@@ -75,33 +85,113 @@ class KalshiClient:
         )
 
     def _authenticate_with_api_key(self):
-        """Authenticate using API key (request signing method)."""
+        """Authenticate using API key (RSA-PSS request signing method)."""
+        if not CRYPTO_AVAILABLE:
+            raise ConnectionError(
+                "cryptography library is required for API key authentication. "
+                "Install with: pip install cryptography"
+            )
+
         try:
-            # For Kalshi API key auth, we need to sign each request
-            # The API key is used directly in the Authorization header
-            # Format: KALSHI-API-KEY api_key_id:signature
+            # Load the RSA private key from PEM format
+            self.private_key = serialization.load_pem_private_key(
+                self.api_private_key_pem.encode('utf-8'),
+                password=None,
+                backend=default_backend()
+            )
 
-            # For now, try simple bearer token approach
-            # If this doesn't work, we'll need to implement full request signing
-            self.client.headers.update({
-                "Authorization": f"Bearer {self.api_private_key}"
-            })
-
-            # Test the authentication by fetching balance
-            response = self.client.get(f"{self.api_base}/portfolio/balance")
+            # Test the authentication by making a signed request
+            # We'll use a custom request method that signs the request
+            response = self._signed_request("GET", "/portfolio/balance")
 
             if response.status_code == 200:
                 self.logger.info("Kalshi API key authentication successful")
                 # API keys don't expire like session tokens
-                self.token = self.api_private_key
                 self.token_expiry = None  # No expiry for API keys
                 return
             else:
-                raise ConnectionError(f"API key test failed: {response.status_code}")
+                raise ConnectionError(
+                    f"API key test failed: {response.status_code} - {response.text}"
+                )
 
         except Exception as e:
             self.logger.error(f"API key authentication failed: {e}")
             raise
+
+    def _sign_request(self, timestamp: str, method: str, path: str) -> str:
+        """Sign a request using RSA-PSS with SHA256.
+
+        Args:
+            timestamp: Timestamp in milliseconds
+            method: HTTP method (GET, POST, etc.)
+            path: Request path without query parameters
+
+        Returns:
+            Base64-encoded signature
+        """
+        # Message format: timestamp + method + path
+        msg_string = timestamp + method + path
+        msg_bytes = msg_string.encode('utf-8')
+
+        # Sign using RSA-PSS with SHA256
+        signature = self.private_key.sign(
+            msg_bytes,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.DIGEST_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+        # Return base64-encoded signature
+        return base64.b64encode(signature).decode('utf-8')
+
+    def _signed_request(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None
+    ) -> httpx.Response:
+        """Make a signed request using API key authentication.
+
+        Args:
+            method: HTTP method (GET, POST, DELETE, etc.)
+            path: Request path (e.g., "/portfolio/balance")
+            params: Query parameters
+            json_data: JSON body data
+
+        Returns:
+            httpx.Response object
+        """
+        # Generate timestamp in milliseconds
+        timestamp_ms = str(int(time.time() * 1000))
+
+        # Strip query parameters from path for signing
+        path_for_signing = path.split('?')[0]
+
+        # Sign the request
+        signature = self._sign_request(timestamp_ms, method.upper(), path_for_signing)
+
+        # Set headers for signed request
+        headers = {
+            "KALSHI-ACCESS-KEY": self.api_key_id,
+            "KALSHI-ACCESS-SIGNATURE": signature,
+            "KALSHI-ACCESS-TIMESTAMP": timestamp_ms,
+            "Content-Type": "application/json",
+        }
+
+        # Make the request
+        url = f"{self.api_base}{path}"
+        response = self.client.request(
+            method=method,
+            url=url,
+            params=params,
+            json=json_data,
+            headers=headers
+        )
+
+        return response
 
     def _authenticate_with_password(self):
         """Authenticate using email and password."""
@@ -144,13 +234,44 @@ class KalshiClient:
                 self.logger.info("Token expired or about to expire, re-authenticating...")
                 self._authenticate_with_password()
 
+    def _make_request(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None
+    ) -> httpx.Response:
+        """Make an authenticated request (supports both API key and password auth).
+
+        Args:
+            method: HTTP method
+            path: Request path
+            params: Query parameters
+            json_data: JSON body
+
+        Returns:
+            httpx.Response
+        """
+        self._ensure_authenticated()
+
+        if self.auth_method == "api_key":
+            # Use signed requests for API key auth
+            return self._signed_request(method, path, params, json_data)
+        else:
+            # Use regular bearer token for password auth
+            url = f"{self.api_base}{path}"
+            return self.client.request(
+                method=method,
+                url=url,
+                params=params,
+                json=json_data
+            )
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def get_balance(self) -> float:
         """Get account balance in cents."""
-        self._ensure_authenticated()
-
         try:
-            response = self.client.get(f"{self.api_base}/portfolio/balance")
+            response = self._make_request("GET", "/portfolio/balance")
 
             if response.status_code != 200:
                 self.logger.error(f"Error fetching balance: {response.status_code}")
@@ -174,8 +295,6 @@ class KalshiClient:
         Returns:
             List of market dictionaries
         """
-        self._ensure_authenticated()
-
         all_markets = []
         cursor = None
 
@@ -189,10 +308,7 @@ class KalshiClient:
                 if cursor:
                     params["cursor"] = cursor
 
-                response = self.client.get(
-                    f"{self.api_base}/markets",
-                    params=params
-                )
+                response = self._make_request("GET", "/markets", params=params)
 
                 if response.status_code != 200:
                     self.logger.error(f"Error fetching markets: {response.status_code}")
@@ -386,8 +502,6 @@ class KalshiClient:
             print(f"[SIMULATION] Kalshi limit order: BUY {count} {side.upper()} @ {price}¢ on {ticker}")
             return f"sim_{ticker}_{int(time.time())}"
 
-        self._ensure_authenticated()
-
         try:
             order_params = {
                 "ticker": ticker,
@@ -399,10 +513,7 @@ class KalshiClient:
                 f"{side.lower()}_price": price,  # yes_price or no_price
             }
 
-            response = self.client.post(
-                f"{self.api_base}/portfolio/orders",
-                json=order_params
-            )
+            response = self._make_request("POST", "/portfolio/orders", json_data=order_params)
 
             if response.status_code not in [200, 201]:
                 self.logger.error(f"Order failed: {response.status_code} - {response.text}")
@@ -420,10 +531,8 @@ class KalshiClient:
 
     def get_open_orders(self) -> List[Dict[str, Any]]:
         """Get all open orders for the account."""
-        self._ensure_authenticated()
-
         try:
-            response = self.client.get(f"{self.api_base}/portfolio/orders")
+            response = self._make_request("GET", "/portfolio/orders")
 
             if response.status_code != 200:
                 self.logger.error(f"Error fetching orders: {response.status_code}")
@@ -438,10 +547,8 @@ class KalshiClient:
 
     def get_positions(self) -> List[Dict[str, Any]]:
         """Get all open positions for the account."""
-        self._ensure_authenticated()
-
         try:
-            response = self.client.get(f"{self.api_base}/portfolio/positions")
+            response = self._make_request("GET", "/portfolio/positions")
 
             if response.status_code != 200:
                 self.logger.error(f"Error fetching positions: {response.status_code}")
@@ -456,10 +563,8 @@ class KalshiClient:
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
-        self._ensure_authenticated()
-
         try:
-            response = self.client.delete(f"{self.api_base}/portfolio/orders/{order_id}")
+            response = self._make_request("DELETE", f"/portfolio/orders/{order_id}")
 
             if response.status_code not in [200, 204]:
                 self.logger.error(f"Error cancelling order: {response.status_code}")

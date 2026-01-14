@@ -12,6 +12,9 @@ pycryptodome>=3.19.0
 py-clob-client>=0.34.0
 py-order-utils>=0.3.0
 
+# Kalshi API (RSA signing)
+cryptography>=41.0.0
+
 # Weather APIs
 requests>=2.31.0
 httpx>=0.25.0
