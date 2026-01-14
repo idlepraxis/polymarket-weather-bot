@@ -587,7 +587,9 @@ class KalshiClient:
 
             # Skip markets that have already closed
             from datetime import timezone
-            if end_date < datetime.now(timezone.utc):
+            now = datetime.now(timezone.utc)
+            if end_date < now:
+                self.logger.debug(f"Skipping {ticker}: end_date={end_date} is in the past (now={now})")
                 return None  # Market already closed
 
             # Extract location and threshold
@@ -599,12 +601,15 @@ class KalshiClient:
             liquidity = market_data.get("liquidity", 0)  # open_interest can be used as proxy
             open_interest = market_data.get("open_interest", 0)
 
-            # Status - skip if not open
+            # Status - skip if not open/active
             status_str = market_data.get("status", "").lower()
-            if status_str != "open":
+            if status_str not in ["open", "active"]:
+                self.logger.debug(f"Skipping {ticker}: status={status_str}")
                 return None  # Skip closed/settled markets
 
             status = MarketStatus.ACTIVE
+
+            self.logger.debug(f"✓ Parsed market: {ticker} | {question[:50]}... | YES: {yes_price:.2f}, NO: {no_price:.2f}")
 
             return WeatherMarket(
                 market_id=ticker,  # Use ticker as market_id
