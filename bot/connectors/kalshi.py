@@ -63,7 +63,7 @@ class KalshiClient:
     def _authenticate(self):
         """Authenticate with Kalshi API using API key or email/password."""
         # Prefer API key authentication if available
-        if self.api_key_id and self.api_private_key:
+        if self.api_key_id and self.api_private_key_pem:
             try:
                 self._authenticate_with_api_key()
                 self.auth_method = "api_key"

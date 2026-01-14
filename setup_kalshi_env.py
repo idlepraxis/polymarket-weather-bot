@@ -60,12 +60,12 @@ KALSHI_API_KEY_ID="{api_key_id}"
 KALSHI_API_PRIVATE_KEY="{private_key_escaped}"
 KALSHI_USE_DEMO=false
 
-# Aggressive $100 Trading Strategy
-EXTREME_MIN_POSITION=1.00
-EXTREME_MAX_POSITION=3.00
-EXTREME_AGGRESSIVE_MAX=10.00
-EXTREME_YES_MAX_PRICE=0.20
-EXTREME_NO_MIN_YES_PRICE=0.35
+# Conservative $100 Strategy: Small bets, high volume
+EXTREME_MIN_POSITION=0.50
+EXTREME_MAX_POSITION=2.00
+EXTREME_AGGRESSIVE_MAX=3.00
+EXTREME_YES_MAX_PRICE=0.15
+EXTREME_NO_MIN_YES_PRICE=0.40
 
 # Trading Parameters
 MAX_POSITION_SIZE_USDC=5.0
@@ -99,7 +99,7 @@ print("\n✓ Successfully created .env file!")
 print("\nYour .env file has been configured with:")
 print(f"  - API Key ID: {api_key_id[:20]}...")
 print(f"  - Private Key: {len(private_key)} characters")
-print(f"  - Aggressive $100 strategy settings")
+print(f"  - Conservative strategy: $0.50-$3.00 bets")
 print("\nYou can now run:")
 print("  python bot.py balance --platform kalshi")
 
