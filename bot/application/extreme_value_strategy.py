@@ -357,9 +357,9 @@ class ExtremeValueStrategy:
         Returns:
             Filtered signals
         """
-        from datetime import timedelta
+        from datetime import timedelta, timezone
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         filtered = []
 
         for signal in signals:
