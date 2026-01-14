@@ -342,75 +342,53 @@ class KalshiClient:
         return all_markets
 
     def _discover_weather_series(self) -> List[str]:
-        """Discover available climate/weather series using the /series endpoint.
+        """Discover temperature series (high/low) using the /series endpoint.
 
         Returns:
             List of series ticker strings (e.g., ["KXHIGH", "KXLOW", ...])
         """
         try:
-            # Try fetching series with "climate" category
+            # Fetch climate series
             params = {"category": "climate"}
             response = self._make_request("GET", "/series", params=params)
 
-            if response and response.status_code == 200:
-                data = response.json()
-                if data and isinstance(data, dict):
-                    series_list = data.get("series", [])
-                    if series_list and isinstance(series_list, list):
-                        tickers = [s.get("ticker") for s in series_list if isinstance(s, dict) and s.get("ticker")]
-                        self.logger.info(f"Found {len(tickers)} climate series via category filter: {tickers}")
-                        if tickers:
-                            return tickers
-                    else:
-                        self.logger.warning(f"No 'series' list in response. Response keys: {list(data.keys())}")
-            else:
-                status = response.status_code if response else "No response"
-                self.logger.warning(f"Climate category request failed: {status}")
-
-            # Fallback: Get all series and filter by keywords
-            self.logger.info("Trying to fetch all series and filter...")
-            response = self._make_request("GET", "/series")
+            if not response or response.status_code != 200:
+                self.logger.warning("Climate category request failed, trying all series...")
+                response = self._make_request("GET", "/series")
 
             if not response or response.status_code != 200:
-                status = response.status_code if response else "No response"
-                self.logger.error(f"Error fetching all series: {status}")
+                self.logger.error("Failed to fetch series")
                 return []
 
             data = response.json()
-            if not data or not isinstance(data, dict):
-                self.logger.error(f"Invalid series response: {data}")
+            series_list = data.get("series", []) if isinstance(data, dict) else []
+
+            if not series_list:
+                self.logger.error("No series found in response")
                 return []
 
-            series_list = data.get("series", [])
-            if not series_list or not isinstance(series_list, list):
-                self.logger.error(f"No series list in response. Keys: {list(data.keys())}")
-                return []
-
-            self.logger.info(f"Fetched {len(series_list)} total series, filtering for climate/weather...")
-
-            # Filter by weather/climate keywords
-            weather_keywords = ["climate", "weather", "temperature", "temp", "rain", "snow", "precipitation"]
-            weather_series = []
-
+            # SIMPLE FILTER: Only high/low temperature series
+            # Look for series with "high" or "low" AND "temperature"/"temp" in title
+            temp_series = []
             for series in series_list:
                 if not isinstance(series, dict):
                     continue
 
                 ticker = series.get("ticker", "")
                 title = series.get("title", "").lower()
-                category = series.get("category", "").lower()
 
-                if any(keyword in title or keyword in category for keyword in weather_keywords):
-                    weather_series.append(ticker)
-                    self.logger.debug(f"Found climate series: {ticker} - {series.get('title')}")
+                is_temp = ("temperature" in title or "temp" in title)
+                is_high_or_low = ("high" in title or "low" in title)
 
-            self.logger.info(f"Filtered to {len(weather_series)} climate series: {weather_series}")
-            return weather_series
+                if is_temp and is_high_or_low:
+                    temp_series.append(ticker)
+                    self.logger.info(f"Found temperature series: {ticker} - {series.get('title')}")
+
+            self.logger.info(f"Found {len(temp_series)} temperature series")
+            return temp_series
 
         except Exception as e:
-            import traceback
-            self.logger.error(f"Error discovering weather series: {e}")
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            self.logger.error(f"Error discovering temperature series: {e}")
             return []
 
     def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
@@ -593,13 +571,13 @@ class KalshiClient:
             # Kalshi uses ISO 8601 format
             end_date = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
 
-            # Skip markets that have already closed
-            from datetime import timezone
-            now = datetime.now(timezone.utc)
-            if end_date < now:
-                # Temporarily use INFO to see why markets are filtered
-                self.logger.info(f"  ⊗ Skipping {ticker}: market closed at {end_date}")
-                return None  # Market already closed
+            # SIMPLE FILTER: Only high/low temperature markets
+            question_lower = question.lower()
+            is_high_temp = "high" in question_lower and ("temp" in question_lower or "temperature" in question_lower)
+            is_low_temp = "low" in question_lower and ("temp" in question_lower or "temperature" in question_lower)
+
+            if not (is_high_temp or is_low_temp):
+                return None  # Skip non-temperature markets
 
             # Extract location and threshold
             location = self._extract_location(question)
@@ -607,18 +585,13 @@ class KalshiClient:
 
             # Get market metrics
             volume = market_data.get("volume", 0)
-            liquidity = market_data.get("liquidity", 0)  # open_interest can be used as proxy
+            liquidity = market_data.get("liquidity", 0)
             open_interest = market_data.get("open_interest", 0)
 
-            # Status - skip if not open/active
-            status_str = market_data.get("status", "").lower()
-            if status_str not in ["open", "active"]:
-                self.logger.info(f"  ⊗ Skipping {ticker}: status={status_str}")
-                return None  # Skip closed/settled markets
-
+            # Trust the API - it already filtered for status="open"
             status = MarketStatus.ACTIVE
 
-            self.logger.info(f"  ✓ {ticker}: YES {yes_price:.0%}, NO {no_price:.0%}")
+            self.logger.info(f"  ✓ {ticker}: {question[:60]}... | YES {yes_price:.0%}")
 
             return WeatherMarket(
                 market_id=ticker,  # Use ticker as market_id
