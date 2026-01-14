@@ -1,8 +1,10 @@
 # Polymarket Weather Bot: Complete Architecture Map
 
-**Version:** 1.0.0
+**Version:** 2.0.0 (Multi-Platform)
 **Last Updated:** January 14, 2026
 **Purpose:** Comprehensive program map for context preservation and future development
+
+**New in v2.0:** Multi-platform support - now trades on both Polymarket AND Kalshi!
 
 ---
 
@@ -18,14 +20,15 @@
 
 ---
 
-## High-Level Architecture
+## High-Level Architecture (v2.0 - Multi-Platform)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USER INTERFACE                          │
-│                     bot/cli/cli.py (Typer + Rich)              │
-│  Commands: scan, trade, status, balance, extreme-scan, etc.    │
-└────────────────┬────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         USER INTERFACE                                  │
+│                     bot/cli/cli.py (Typer + Rich)                      │
+│  Commands: extreme-scan --platform [polymarket|kalshi]                 │
+│            extreme-trade --platform [polymarket|kalshi]                │
+└────────────────┬────────────────────────────────────────────────────────┘
                  │
     ┌────────────┴─────────────┐
     │                          │
@@ -37,46 +40,59 @@
 │  trader.py      │    │  extreme_value   │
 │  (Forecast      │    │  _strategy.py    │
 │   Arbitrage)    │    │  (Price-driven)  │
+│                 │    │  ** PLATFORM-    │
+│                 │    │   AGNOSTIC **    │
 └────────┬────────┘    └────────┬─────────┘
          │                      │
          └──────────┬───────────┘
                     │
-    ┌───────────────┴──────────────┐
-    │                              │
-    ▼                              ▼
-┌──────────────────┐    ┌───────────────────┐
-│   CONNECTORS     │    │    CONNECTORS     │
-│                  │    │                   │
-│  polymarket.py   │    │   weather.py      │
-│  - Chainstack    │    │   - OpenWeather   │
-│  - CLOB API      │    │   - WeatherAPI    │
-│  - Web3          │    │   - NOAA          │
-└────────┬─────────┘    └──────────┬────────┘
-         │                         │
-         │                         │
-    ┌────┴─────────────────────────┴────┐
-    │                                   │
-    ▼                                   ▼
-┌─────────────────┐         ┌──────────────────┐
-│  UTILS LAYER    │         │   EXTERNAL APIs  │
-│                 │         │                  │
-│  - config.py    │         │  - Polygon RPC   │
-│  - models.py    │         │  - Polymarket    │
-│  - logger.py    │         │  - Weather APIs  │
-└─────────────────┘         └──────────────────┘
+    ┌───────────────┴─────────────────────┐
+    │                                     │
+    ▼                                     ▼
+┌───────────────────┐         ┌──────────────────┐
+│   CONNECTORS      │         │    CONNECTORS    │
+│                   │         │                  │
+│  polymarket.py    │         │   kalshi.py      │
+│  - Chainstack     │         │   - RSA-PSS Auth │
+│  - CLOB API       │         │   - REST API     │
+│  - Web3           │         │   - 10 Cities    │
+│  - 175+ markets   │         │   - 72 markets   │
+└──────────┬────────┘         └────────┬─────────┘
+           │                           │
+           └──────────┬────────────────┘
+                      │
+       ┌──────────────┴─────────────────┐
+       │                                │
+       ▼                                ▼
+┌──────────────────┐         ┌──────────────────┐
+│   weather.py     │         │   EXTERNAL APIs  │
+│   - OpenWeather  │         │                  │
+│   - WeatherAPI   │         │  - Polygon RPC   │
+│   - NOAA         │         │  - Polymarket    │
+└──────────────────┘         │  - Kalshi        │
+                             │  - Weather APIs  │
+                             └──────────────────┘
+
+┌─────────────────────────────────────────────┐
+│              UTILS LAYER                    │
+│  - config.py (loads both platform creds)   │
+│  - models.py (unified WeatherMarket)       │
+│  - logger.py                               │
+└─────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility | Key Functions |
 |-----------|---------------|---------------|
-| **CLI** | User interface, command routing | `extreme_scan()`, `extreme_trade()`, `status()` |
-| **ExtremeValueStrategy** | Price-driven trading logic | `scan_for_opportunities()`, `_check_yes_opportunity()` |
+| **CLI** | User interface, multi-platform routing | `extreme_scan()`, `extreme_trade()`, `--platform` flag |
+| **ExtremeValueStrategy** | Price-driven trading (platform-agnostic) | `scan_for_opportunities()`, `_check_yes_opportunity()` |
 | **Trader** | Forecast-driven trading logic | `analyze_market()`, `scan_and_trade()` |
-| **PolymarketClient** | Blockchain & market data | `get_all_markets()`, `execute_market_order()`, `batch_get_token_prices()` |
+| **PolymarketClient** | Polymarket blockchain & market data | `get_all_markets()`, `execute_market_order()`, `batch_get_token_prices()` |
+| **KalshiClient** | Kalshi REST API & trading | `get_all_markets()`, `execute_limit_order()`, `_discover_weather_series()` |
 | **WeatherConnector** | Weather forecasts | `get_forecast()`, `calculate_probability()` |
-| **Config** | Configuration management | Load/validate `.env` settings |
-| **Models** | Type-safe data structures | `WeatherMarket`, `TradeSignal`, `Trade` |
+| **Config** | Configuration management | Load/validate `.env` for both platforms |
+| **Models** | Type-safe data structures | `WeatherMarket`, `TradeSignal`, `Trade` (unified across platforms) |
 
 ---
 
