@@ -342,54 +342,17 @@ class KalshiClient:
         return all_markets
 
     def _discover_weather_series(self) -> List[str]:
-        """Discover temperature series (high/low) using the /series endpoint.
+        """Get known temperature series tickers.
 
         Returns:
-            List of series ticker strings (e.g., ["KXHIGH", "KXLOW", ...])
+            List of series ticker strings for high/low temperature markets
         """
-        try:
-            # Fetch climate series
-            params = {"category": "climate"}
-            response = self._make_request("GET", "/series", params=params)
+        # Use known temperature series patterns
+        # Kalshi uses patterns like KXHIGH-{date} and KXLOW-{date} for daily temperature
+        known_patterns = ["KXHIGH", "KXLOW", "KCHIGH", "KCLOW"]
 
-            if not response or response.status_code != 200:
-                self.logger.warning("Climate category request failed, trying all series...")
-                response = self._make_request("GET", "/series")
-
-            if not response or response.status_code != 200:
-                self.logger.error("Failed to fetch series")
-                return []
-
-            data = response.json()
-            series_list = data.get("series", []) if isinstance(data, dict) else []
-
-            if not series_list:
-                self.logger.error("No series found in response")
-                return []
-
-            # SIMPLE FILTER: Only high/low temperature series
-            # Look for series with "high" or "low" AND "temperature"/"temp" in title
-            temp_series = []
-            for series in series_list:
-                if not isinstance(series, dict):
-                    continue
-
-                ticker = series.get("ticker", "")
-                title = series.get("title", "").lower()
-
-                is_temp = ("temperature" in title or "temp" in title)
-                is_high_or_low = ("high" in title or "low" in title)
-
-                if is_temp and is_high_or_low:
-                    temp_series.append(ticker)
-                    self.logger.info(f"Found temperature series: {ticker} - {series.get('title')}")
-
-            self.logger.info(f"Found {len(temp_series)} temperature series")
-            return temp_series
-
-        except Exception as e:
-            self.logger.error(f"Error discovering temperature series: {e}")
-            return []
+        self.logger.info(f"Using known temperature series patterns: {known_patterns}")
+        return known_patterns
 
     def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
         """Fetch weather markets directly using series discovery and series_ticker API parameter.
