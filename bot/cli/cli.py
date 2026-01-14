@@ -530,8 +530,16 @@ def extreme_trade(
 
                 executed += 1
 
+                # Display action properly for each platform
+                if platform.lower() == "kalshi":
+                    # Kalshi: show "BUY YES" or "BUY NO"
+                    action_display = f"BUY {side.upper()}"
+                else:
+                    # Polymarket: show "BUY" or "SELL"
+                    action_display = signal.action
+
                 console.print(
-                    f"[green]✓[/green] {signal.action} {signal.size:.2f} USDC @ {signal.price:.1%} "
+                    f"[green]✓[/green] {action_display} {signal.size:.2f} USDC @ {signal.price:.1%} "
                     f"- {signal.market.question[:40]}..."
                 )
 
