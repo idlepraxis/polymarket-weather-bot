@@ -341,8 +341,56 @@ class KalshiClient:
 
         return all_markets
 
+    def _discover_weather_series(self) -> List[str]:
+        """Discover available climate/weather series using the /series endpoint.
+
+        Returns:
+            List of series ticker strings (e.g., ["KXHIGH", "KXLOW", ...])
+        """
+        try:
+            # Try fetching series with "climate" category
+            params = {"category": "climate"}
+            response = self._make_request("GET", "/series", params=params)
+
+            if response.status_code == 200:
+                data = response.json()
+                series_list = data.get("series", [])
+                tickers = [s.get("ticker") for s in series_list if s.get("ticker")]
+                self.logger.info(f"Found {len(tickers)} climate series via category filter")
+                if tickers:
+                    return tickers
+
+            # Fallback: Get all series and filter by keywords
+            self.logger.info("Trying to fetch all series and filter...")
+            response = self._make_request("GET", "/series")
+
+            if response.status_code != 200:
+                self.logger.error(f"Error fetching series: {response.status_code}")
+                return []
+
+            data = response.json()
+            series_list = data.get("series", [])
+
+            # Filter by weather/climate keywords
+            weather_keywords = ["climate", "weather", "temperature", "temp", "rain", "snow", "precipitation"]
+            weather_series = []
+
+            for series in series_list:
+                ticker = series.get("ticker", "")
+                title = series.get("title", "").lower()
+                category = series.get("category", "").lower()
+
+                if any(keyword in title or keyword in category for keyword in weather_keywords):
+                    weather_series.append(ticker)
+
+            return weather_series
+
+        except Exception as e:
+            self.logger.error(f"Error discovering weather series: {e}")
+            return []
+
     def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
-        """Fetch weather markets directly using series_ticker API parameter.
+        """Fetch weather markets directly using series discovery and series_ticker API parameter.
 
         This is much more efficient than fetching all markets and filtering.
 
@@ -352,13 +400,15 @@ class KalshiClient:
         Returns:
             List of weather market dictionaries
         """
-        # Weather series on Kalshi
-        weather_series = [
-            "KXHIGH",  # High temperature series
-            "KXLOW",   # Low temperature series
-            "KXRAIN",  # Rainfall series
-            "KXSNOW",  # Snowfall series
-        ]
+        # First, discover available climate/weather series
+        self.logger.info("Discovering climate/weather series...")
+        weather_series = self._discover_weather_series()
+
+        if not weather_series:
+            self.logger.warning("No climate/weather series found")
+            return []
+
+        self.logger.info(f"Found {len(weather_series)} climate/weather series: {weather_series}")
 
         all_weather_markets = []
 
@@ -378,13 +428,8 @@ class KalshiClient:
                     markets = data.get("markets", [])
                     all_weather_markets.extend(markets)
                     self.logger.info(f"  Found {len(markets)} {series} markets")
-
-                    # Debug: Show response structure if empty
-                    if len(markets) == 0:
-                        self.logger.debug(f"  Response keys: {list(data.keys())}")
-                        self.logger.debug(f"  Cursor: {data.get('cursor')}")
                 else:
-                    self.logger.warning(f"  Error fetching {series}: {response.status_code} - {response.text}")
+                    self.logger.warning(f"  Error fetching {series}: {response.status_code}")
 
                 time.sleep(0.2)  # Rate limiting
 
