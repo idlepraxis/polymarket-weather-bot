@@ -409,7 +409,7 @@ class KalshiClient:
             List of weather market dictionaries
         """
         weather_keywords = [
-            "temperature", "temp", "degrees", "fahrenheit", "celsius",
+            "climate", "temperature", "temp", "degrees", "fahrenheit", "celsius",
             "high", "low", "precipitation", "rain", "snow", "weather"
         ]
 
@@ -432,15 +432,21 @@ class KalshiClient:
 
             # Filter for weather keywords
             weather_markets = []
+            sample_logged = False
             for market in all_markets:
                 title = market.get("title", "").lower()
                 subtitle = market.get("subtitle", "").lower()
                 event_ticker = market.get("event_ticker", "").lower()
+                ticker = market.get("ticker", "").lower()
 
-                if any(keyword in title or keyword in subtitle or keyword in event_ticker for keyword in weather_keywords):
+                if any(keyword in title or keyword in subtitle or keyword in event_ticker or keyword in ticker for keyword in weather_keywords):
                     weather_markets.append(market)
+                    # Log first match for debugging
+                    if not sample_logged:
+                        self.logger.info(f"Sample climate market found: {market.get('title')} (event: {market.get('event_ticker')})")
+                        sample_logged = True
 
-            self.logger.info(f"Found {len(weather_markets)} weather markets via keyword search")
+            self.logger.info(f"Found {len(weather_markets)} climate/weather markets via keyword search")
             return weather_markets
 
         except Exception as e:
