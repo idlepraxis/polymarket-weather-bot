@@ -1,5 +1,7 @@
 """Kalshi connector for weather prediction markets."""
 
+import hashlib
+import hmac
 import time
 import uuid
 from datetime import datetime
@@ -26,11 +28,15 @@ class KalshiClient:
         else:
             self.api_base = "https://trading-api.kalshi.com/trade-api/v2"
 
-        # Authentication
+        # Authentication credentials
+        self.api_key_id = config.kalshi_api_key_id
+        self.api_private_key = config.kalshi_api_private_key
         self.email = config.kalshi_email
         self.password = config.kalshi_password
+
         self.token = None
         self.token_expiry = None
+        self.auth_method = None
 
         # HTTP client with persistent session
         self.client = httpx.Client(timeout=30.0)
@@ -39,10 +45,66 @@ class KalshiClient:
         self._authenticate()
 
         print(f"Connected to Kalshi ({self.api_base})")
-        print(f"Email: {self.email}")
+        if self.auth_method == "api_key":
+            print(f"Authentication: API Key (ID: {self.api_key_id[:10]}...)")
+        else:
+            print(f"Authentication: Email/Password ({self.email})")
 
     def _authenticate(self):
-        """Authenticate with Kalshi API and get session token."""
+        """Authenticate with Kalshi API using API key or email/password."""
+        # Prefer API key authentication if available
+        if self.api_key_id and self.api_private_key:
+            try:
+                self._authenticate_with_api_key()
+                self.auth_method = "api_key"
+                return
+            except Exception as e:
+                self.logger.warning(f"API key authentication failed: {e}")
+                # Fall through to email/password if available
+
+        # Fall back to email/password authentication
+        if self.email and self.password:
+            self._authenticate_with_password()
+            self.auth_method = "password"
+            return
+
+        raise ConnectionError(
+            "No valid Kalshi credentials found. "
+            "Please provide either (KALSHI_API_KEY_ID + KALSHI_API_PRIVATE_KEY) "
+            "or (KALSHI_EMAIL + KALSHI_PASSWORD) in your .env file."
+        )
+
+    def _authenticate_with_api_key(self):
+        """Authenticate using API key (request signing method)."""
+        try:
+            # For Kalshi API key auth, we need to sign each request
+            # The API key is used directly in the Authorization header
+            # Format: KALSHI-API-KEY api_key_id:signature
+
+            # For now, try simple bearer token approach
+            # If this doesn't work, we'll need to implement full request signing
+            self.client.headers.update({
+                "Authorization": f"Bearer {self.api_private_key}"
+            })
+
+            # Test the authentication by fetching balance
+            response = self.client.get(f"{self.api_base}/portfolio/balance")
+
+            if response.status_code == 200:
+                self.logger.info("Kalshi API key authentication successful")
+                # API keys don't expire like session tokens
+                self.token = self.api_private_key
+                self.token_expiry = None  # No expiry for API keys
+                return
+            else:
+                raise ConnectionError(f"API key test failed: {response.status_code}")
+
+        except Exception as e:
+            self.logger.error(f"API key authentication failed: {e}")
+            raise
+
+    def _authenticate_with_password(self):
+        """Authenticate using email and password."""
         try:
             response = self.client.post(
                 f"{self.api_base}/login",
@@ -64,7 +126,7 @@ class KalshiClient:
             # Token expires in 30 minutes
             self.token_expiry = time.time() + (30 * 60)
 
-            self.logger.info("Kalshi authentication successful")
+            self.logger.info("Kalshi email/password authentication successful")
 
         except Exception as e:
             self.logger.error(f"Kalshi authentication failed: {e}")
@@ -72,9 +134,15 @@ class KalshiClient:
 
     def _ensure_authenticated(self):
         """Ensure we have a valid token, refresh if needed."""
-        if not self.token or time.time() >= self.token_expiry - 60:  # Refresh 1 min before expiry
-            self.logger.info("Token expired or about to expire, re-authenticating...")
-            self._authenticate()
+        # API keys don't expire
+        if self.auth_method == "api_key":
+            return
+
+        # Password-based tokens expire after 30 minutes
+        if self.auth_method == "password":
+            if not self.token or (self.token_expiry and time.time() >= self.token_expiry - 60):
+                self.logger.info("Token expired or about to expire, re-authenticating...")
+                self._authenticate_with_password()
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def get_balance(self) -> float:

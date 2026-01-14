@@ -37,7 +37,9 @@ class Config(BaseSettings):
     telegram_bot_token: Optional[str] = Field(None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: Optional[str] = Field(None, alias="TELEGRAM_CHAT_ID")
 
-    # Kalshi API
+    # Kalshi API (supports both API key and email/password)
+    kalshi_api_key_id: Optional[str] = Field(None, alias="KALSHI_API_KEY_ID")
+    kalshi_api_private_key: Optional[str] = Field(None, alias="KALSHI_API_PRIVATE_KEY")
     kalshi_email: Optional[str] = Field(None, alias="KALSHI_EMAIL")
     kalshi_password: Optional[str] = Field(None, alias="KALSHI_PASSWORD")
     kalshi_use_demo: bool = Field(False, alias="KALSHI_USE_DEMO")
