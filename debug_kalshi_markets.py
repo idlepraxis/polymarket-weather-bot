@@ -22,19 +22,21 @@ else:
     print(f"Failed: {response.status_code if response else 'No response'}")
 
 print("\n" + "="*80)
-print("2. Searching 1000 markets for 'daily temperature' keyword...")
-response = client._make_request("GET", "/markets", params={"limit": 1000, "status": "open"})
+print("2. Searching ALL markets (no status filter) for 'high' or 'low'...")
+response = client._make_request("GET", "/markets", params={"limit": 1000})
 
 if response and response.status_code == 200:
     data = response.json()
     markets = data.get("markets", [])
 
-    daily_temp_markets = [m for m in markets if "daily" in m.get("title", "").lower() and "temp" in m.get("title", "").lower()]
-    print(f"Found {len(daily_temp_markets)} 'daily temperature' markets out of {len(markets)} total")
+    temp_markets = [m for m in markets if ("high" in m.get("title", "").lower() or "low" in m.get("title", "").lower()) and
+                    ("temp" in m.get("title", "").lower() or "degree" in m.get("title", "").lower() or "°" in m.get("title", ""))]
+    print(f"Found {len(temp_markets)} temperature markets out of {len(markets)} total")
 
-    for i, market in enumerate(daily_temp_markets[:10], 1):
+    for i, market in enumerate(temp_markets[:10], 1):
         print(f"\n{i}. {market.get('ticker', 'N/A')}")
         print(f"   {market.get('title', 'N/A')}")
+        print(f"   Status: {market.get('status', 'N/A')}")
         print(f"   Series: {market.get('series_ticker', 'N/A')}")
 else:
     print(f"Failed: {response.status_code if response else 'No response'}")
