@@ -13,6 +13,7 @@ from rich import box
 from bot.application.trader import WeatherTrader
 from bot.application.extreme_value_strategy import ExtremeValueStrategy
 from bot.connectors.polymarket import PolymarketClient
+from bot.connectors.kalshi import KalshiClient
 from bot.connectors.weather import WeatherConnector
 from bot.utils.config import Config, get_config
 from bot.utils.logger import setup_logger, get_logger
@@ -263,14 +264,21 @@ def run(
 
 
 @app.command()
-def balance():
-    """Check USDC balance."""
+def balance(
+    platform: str = typer.Option("polymarket", help="Platform: polymarket or kalshi"),
+):
+    """Check balance on specified platform."""
     try:
         config = get_config()
-        polymarket = PolymarketClient(config)
 
-        balance = polymarket.get_usdc_balance()
-        console.print(f"\n[green]USDC Balance:[/green] ${balance:.2f}\n")
+        if platform.lower() == "kalshi":
+            client = KalshiClient(config)
+            balance = client.get_balance()
+            console.print(f"\n[green]Kalshi Balance:[/green] ${balance:.2f}\n")
+        else:
+            client = PolymarketClient(config)
+            balance = client.get_usdc_balance()
+            console.print(f"\n[green]Polymarket USDC Balance:[/green] ${balance:.2f}\n")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -332,6 +340,7 @@ def extreme_scan(
     limit: int = typer.Option(20, help="Max opportunities to show"),
     yes_max: float = typer.Option(0.15, help="Max YES price to buy"),
     no_min_yes: float = typer.Option(0.40, help="Min YES price to buy NO"),
+    platform: str = typer.Option("polymarket", help="Platform: polymarket or kalshi"),
 ):
     """Scan for EXTREME VALUE opportunities (mispriced shares).
 
@@ -342,21 +351,28 @@ def extreme_scan(
     """
     try:
         config = get_config()
-        polymarket = PolymarketClient(config)
         weather = WeatherConnector(config)
+
+        # Initialize the appropriate client based on platform
+        if platform.lower() == "kalshi":
+            client = KalshiClient(config)
+            platform_name = "Kalshi"
+        else:  # Default to Polymarket
+            client = PolymarketClient(config)
+            platform_name = "Polymarket"
 
         # Override config with CLI params
         config.extreme_yes_max_price = yes_max
         config.extreme_no_min_yes_price = no_min_yes
 
-        strategy = ExtremeValueStrategy(config, polymarket, weather)
+        strategy = ExtremeValueStrategy(config, client, weather)
 
-        console.print("[cyan]Scanning for EXTREME VALUE opportunities...[/cyan]")
+        console.print(f"[cyan]Scanning {platform_name} for EXTREME VALUE opportunities...[/cyan]")
         console.print(f"Rules: YES < {yes_max:.0%}, NO when YES > {no_min_yes:.0%}\n")
 
         # Fetch markets
-        all_markets = polymarket.get_all_markets()
-        weather_markets = polymarket.filter_weather_markets(all_markets)
+        all_markets = client.get_all_markets()
+        weather_markets = client.filter_weather_markets(all_markets)
 
         console.print(f"Found {len(weather_markets)} weather markets")
 
@@ -425,6 +441,7 @@ def extreme_trade(
     yes_max: float = typer.Option(0.15, help="Max YES price"),
     no_min_yes: float = typer.Option(0.40, help="Min YES price for NO"),
     max_trades: int = typer.Option(10, help="Max trades to execute"),
+    platform: str = typer.Option("polymarket", help="Platform: polymarket or kalshi"),
 ):
     """Execute EXTREME VALUE trades (mispriced shares).
 
@@ -432,20 +449,27 @@ def extreme_trade(
     """
     try:
         config = get_config()
-        polymarket = PolymarketClient(config)
         weather = WeatherConnector(config)
+
+        # Initialize the appropriate client based on platform
+        if platform.lower() == "kalshi":
+            client = KalshiClient(config)
+            platform_name = "Kalshi"
+        else:  # Default to Polymarket
+            client = PolymarketClient(config)
+            platform_name = "Polymarket"
 
         # Override settings
         config.extreme_yes_max_price = yes_max
         config.extreme_no_min_yes_price = no_min_yes
         config.simulation_mode = dry_run
 
-        strategy = ExtremeValueStrategy(config, polymarket, weather)
+        strategy = ExtremeValueStrategy(config, client, weather)
 
         mode = "SIMULATION" if dry_run else "LIVE"
         mode_color = "yellow" if dry_run else "red"
 
-        console.print(f"[{mode_color} bold]EXTREME VALUE Trading - {mode} Mode[/{mode_color} bold]")
+        console.print(f"[{mode_color} bold]EXTREME VALUE Trading on {platform_name} - {mode} Mode[/{mode_color} bold]")
 
         if not dry_run:
             confirm = typer.confirm("⚠️  Execute LIVE trades with real funds?")
@@ -453,8 +477,8 @@ def extreme_trade(
                 raise typer.Exit(0)
 
         # Scan for opportunities
-        all_markets = polymarket.get_all_markets()
-        weather_markets = polymarket.filter_weather_markets(all_markets)
+        all_markets = client.get_all_markets()
+        weather_markets = client.filter_weather_markets(all_markets)
 
         signals = strategy.scan_for_opportunities(weather_markets)
         signals = strategy.filter_by_time_to_resolution(signals)
@@ -469,12 +493,28 @@ def extreme_trade(
         executed = 0
         for signal in signals[:max_trades]:
             try:
-                # Execute trade
-                order_id = polymarket.execute_market_order(
-                    token_id=signal.token_id,
-                    amount=signal.size,
-                    simulation=dry_run,
-                )
+                # Execute trade based on platform
+                if platform.lower() == "kalshi":
+                    # Kalshi uses ticker, side, count, and price in cents
+                    ticker = signal.market.market_id  # ticker stored in market_id
+                    side = "yes" if signal.action == "BUY" else "no"
+                    price_cents = int(signal.price * 100)  # Convert 0-1 to cents
+                    count = int(signal.size / signal.price)  # Number of contracts
+
+                    order_id = client.execute_limit_order(
+                        ticker=ticker,
+                        side=side,
+                        count=count,
+                        price=price_cents,
+                        simulation=dry_run,
+                    )
+                else:
+                    # Polymarket uses token_id and USDC amount
+                    order_id = client.execute_market_order(
+                        token_id=signal.token_id,
+                        amount=signal.size,
+                        simulation=dry_run,
+                    )
 
                 executed += 1
 

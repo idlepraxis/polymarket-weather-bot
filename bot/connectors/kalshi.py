@@ -1,0 +1,463 @@
+"""Kalshi connector for weather prediction markets."""
+
+import time
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+from bot.utils.config import Config
+from bot.utils.logger import get_logger
+from bot.utils.models import WeatherMarket, MarketStatus
+
+
+class KalshiClient:
+    """Client for interacting with Kalshi prediction markets."""
+
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = get_logger()
+
+        # API endpoints
+        if config.kalshi_use_demo:
+            self.api_base = "https://demo-api.kalshi.co/trade-api/v2"
+        else:
+            self.api_base = "https://trading-api.kalshi.com/trade-api/v2"
+
+        # Authentication
+        self.email = config.kalshi_email
+        self.password = config.kalshi_password
+        self.token = None
+        self.token_expiry = None
+
+        # HTTP client with persistent session
+        self.client = httpx.Client(timeout=30.0)
+
+        # Authenticate
+        self._authenticate()
+
+        print(f"Connected to Kalshi ({self.api_base})")
+        print(f"Email: {self.email}")
+
+    def _authenticate(self):
+        """Authenticate with Kalshi API and get session token."""
+        try:
+            response = self.client.post(
+                f"{self.api_base}/login",
+                json={"email": self.email, "password": self.password}
+            )
+
+            if response.status_code != 200:
+                raise ConnectionError(f"Authentication failed: {response.status_code} - {response.text}")
+
+            data = response.json()
+            self.token = data.get("token")
+
+            if not self.token:
+                raise ConnectionError("No token received from authentication")
+
+            # Set token in headers for all future requests
+            self.client.headers.update({"Authorization": f"Bearer {self.token}"})
+
+            # Token expires in 30 minutes
+            self.token_expiry = time.time() + (30 * 60)
+
+            self.logger.info("Kalshi authentication successful")
+
+        except Exception as e:
+            self.logger.error(f"Kalshi authentication failed: {e}")
+            raise
+
+    def _ensure_authenticated(self):
+        """Ensure we have a valid token, refresh if needed."""
+        if not self.token or time.time() >= self.token_expiry - 60:  # Refresh 1 min before expiry
+            self.logger.info("Token expired or about to expire, re-authenticating...")
+            self._authenticate()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def get_balance(self) -> float:
+        """Get account balance in cents."""
+        self._ensure_authenticated()
+
+        try:
+            response = self.client.get(f"{self.api_base}/portfolio/balance")
+
+            if response.status_code != 200:
+                self.logger.error(f"Error fetching balance: {response.status_code}")
+                return 0.0
+
+            data = response.json()
+            # Balance is in cents, convert to dollars
+            balance_cents = data.get("balance", 0)
+            return balance_cents / 100.0
+
+        except Exception as e:
+            self.logger.error(f"Error fetching balance: {e}")
+            return 0.0
+
+    def get_all_markets(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Fetch all active markets from Kalshi API.
+
+        Args:
+            limit: Max markets per request (default 200)
+
+        Returns:
+            List of market dictionaries
+        """
+        self._ensure_authenticated()
+
+        all_markets = []
+        cursor = None
+
+        while True:
+            try:
+                params = {
+                    "limit": limit,
+                    "status": "open",  # Only get open markets
+                }
+
+                if cursor:
+                    params["cursor"] = cursor
+
+                response = self.client.get(
+                    f"{self.api_base}/markets",
+                    params=params
+                )
+
+                if response.status_code != 200:
+                    self.logger.error(f"Error fetching markets: {response.status_code}")
+                    break
+
+                data = response.json()
+                markets = data.get("markets", [])
+
+                if not markets:
+                    break
+
+                all_markets.extend(markets)
+
+                # Check for pagination
+                cursor = data.get("cursor")
+                if not cursor:
+                    break
+
+                time.sleep(0.2)  # Rate limiting
+
+            except Exception as e:
+                self.logger.error(f"Error fetching markets: {e}")
+                break
+
+        return all_markets
+
+    def filter_weather_markets(self, markets: List[Dict[str, Any]]) -> List[WeatherMarket]:
+        """Filter markets for weather-related predictions.
+
+        Kalshi weather markets are in the "Climate and Weather" category
+        and typically include temperature, precipitation, and snow markets.
+
+        Args:
+            markets: List of market dictionaries from API
+
+        Returns:
+            List of parsed WeatherMarket objects
+        """
+        # Weather-related series/tickers
+        weather_series = [
+            "KXHIGH",  # High temperature series
+            "KXLOW",   # Low temperature series
+            "KXRAIN",  # Rainfall series
+            "KXSNOW",  # Snowfall series
+            "KXTEMP",  # Temperature series
+        ]
+
+        # Weather keywords
+        weather_keywords = [
+            "temperature",
+            "celsius",
+            "fahrenheit",
+            "degrees",
+            "high temp",
+            "low temp",
+            "precipitation",
+            "rainfall",
+            "snowfall",
+            "rain",
+            "snow",
+        ]
+
+        weather_markets = []
+
+        for market_data in markets:
+            try:
+                ticker = market_data.get("ticker", "")
+                title = market_data.get("title", "").lower()
+                subtitle = market_data.get("subtitle", "").lower()
+                category = market_data.get("category", "").lower()
+
+                # Check if it's a weather series
+                is_weather_series = any(series in ticker.upper() for series in weather_series)
+
+                # Check if category is climate/weather
+                is_weather_category = "climate" in category or "weather" in category
+
+                # Check if title/subtitle contains weather keywords
+                has_weather_keywords = any(
+                    keyword in title or keyword in subtitle
+                    for keyword in weather_keywords
+                )
+
+                if is_weather_series or is_weather_category or has_weather_keywords:
+                    weather_market = self._parse_weather_market(market_data)
+                    if weather_market:
+                        weather_markets.append(weather_market)
+
+            except Exception as e:
+                self.logger.error(f"Error filtering market: {e}")
+                continue
+
+        return weather_markets
+
+    def _parse_weather_market(self, market_data: Dict[str, Any]) -> Optional[WeatherMarket]:
+        """Parse raw Kalshi market data into WeatherMarket model.
+
+        Args:
+            market_data: Raw market data from API
+
+        Returns:
+            Parsed WeatherMarket or None if parsing fails
+        """
+        try:
+            # Extract basic info
+            ticker = market_data.get("ticker", "")
+            event_ticker = market_data.get("event_ticker", "")
+            title = market_data.get("title", "")
+            subtitle = market_data.get("subtitle", "")
+
+            # Combine title and subtitle for question
+            question = f"{title} - {subtitle}" if subtitle else title
+
+            # Get prices (Kalshi uses cents: 0-100)
+            yes_bid = market_data.get("yes_bid", 50) / 100.0  # Convert to 0-1
+            yes_ask = market_data.get("yes_ask", 50) / 100.0
+            no_bid = market_data.get("no_bid", 50) / 100.0
+            no_ask = market_data.get("no_ask", 50) / 100.0
+
+            # Use mid-price (average of bid and ask)
+            yes_price = (yes_bid + yes_ask) / 2.0
+            no_price = (no_bid + no_ask) / 2.0
+
+            # Parse close time
+            close_time_str = market_data.get("close_time", "")
+            if not close_time_str:
+                return None
+
+            # Kalshi uses ISO 8601 format
+            end_date = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
+
+            # Extract location and threshold
+            location = self._extract_location(question)
+            temp_threshold = self._extract_temperature(question)
+
+            # Get market metrics
+            volume = market_data.get("volume", 0)
+            liquidity = market_data.get("liquidity", 0)  # open_interest can be used as proxy
+            open_interest = market_data.get("open_interest", 0)
+
+            # Status
+            status_str = market_data.get("status", "open")
+            status = MarketStatus.ACTIVE if status_str == "open" else MarketStatus.CLOSED
+
+            return WeatherMarket(
+                market_id=ticker,  # Use ticker as market_id
+                condition_id=event_ticker,  # Use event_ticker as condition_id
+                question=question,
+                description=subtitle,
+                yes_token_id=f"{ticker}_YES",  # Synthetic token IDs
+                no_token_id=f"{ticker}_NO",
+                yes_price=yes_price,
+                no_price=no_price,
+                spread=abs(yes_price + no_price - 1.0),
+                status=status,
+                end_date=end_date,
+                liquidity=float(liquidity or open_interest),
+                volume=float(volume),
+                location=location,
+                temperature_threshold=temp_threshold,
+                weather_type=self._extract_weather_type(question),
+                market_url=f"https://kalshi.com/events/{event_ticker}/{ticker}",
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error parsing Kalshi market: {e}")
+            return None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def execute_limit_order(
+        self,
+        ticker: str,
+        side: str,  # "yes" or "no"
+        count: int,  # Number of contracts
+        price: int,  # Price in cents (0-100)
+        simulation: bool = False
+    ) -> Optional[str]:
+        """Execute a limit order on Kalshi.
+
+        Args:
+            ticker: Market ticker
+            side: "yes" or "no"
+            count: Number of contracts to buy
+            price: Price in cents (0-100)
+            simulation: If True, simulate the order
+
+        Returns:
+            Order ID if successful
+        """
+        if simulation:
+            print(f"[SIMULATION] Kalshi limit order: BUY {count} {side.upper()} @ {price}¢ on {ticker}")
+            return f"sim_{ticker}_{int(time.time())}"
+
+        self._ensure_authenticated()
+
+        try:
+            order_params = {
+                "ticker": ticker,
+                "client_order_id": str(uuid.uuid4()),
+                "type": "limit",
+                "action": "buy",  # We only buy for now
+                "side": side.lower(),
+                "count": count,
+                f"{side.lower()}_price": price,  # yes_price or no_price
+            }
+
+            response = self.client.post(
+                f"{self.api_base}/portfolio/orders",
+                json=order_params
+            )
+
+            if response.status_code not in [200, 201]:
+                self.logger.error(f"Order failed: {response.status_code} - {response.text}")
+                raise Exception(f"Order execution failed: {response.text}")
+
+            data = response.json()
+            order_id = data.get("order", {}).get("order_id")
+
+            self.logger.info(f"Kalshi order placed: {order_id}")
+            return order_id
+
+        except Exception as e:
+            self.logger.error(f"Error executing Kalshi order: {e}")
+            raise
+
+    def get_open_orders(self) -> List[Dict[str, Any]]:
+        """Get all open orders for the account."""
+        self._ensure_authenticated()
+
+        try:
+            response = self.client.get(f"{self.api_base}/portfolio/orders")
+
+            if response.status_code != 200:
+                self.logger.error(f"Error fetching orders: {response.status_code}")
+                return []
+
+            data = response.json()
+            return data.get("orders", [])
+
+        except Exception as e:
+            self.logger.error(f"Error fetching open orders: {e}")
+            return []
+
+    def get_positions(self) -> List[Dict[str, Any]]:
+        """Get all open positions for the account."""
+        self._ensure_authenticated()
+
+        try:
+            response = self.client.get(f"{self.api_base}/portfolio/positions")
+
+            if response.status_code != 200:
+                self.logger.error(f"Error fetching positions: {response.status_code}")
+                return []
+
+            data = response.json()
+            return data.get("positions", [])
+
+        except Exception as e:
+            self.logger.error(f"Error fetching positions: {e}")
+            return []
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel an open order."""
+        self._ensure_authenticated()
+
+        try:
+            response = self.client.delete(f"{self.api_base}/portfolio/orders/{order_id}")
+
+            if response.status_code not in [200, 204]:
+                self.logger.error(f"Error cancelling order: {response.status_code}")
+                return False
+
+            self.logger.info(f"Order cancelled: {order_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error cancelling order: {e}")
+            return False
+
+    def _extract_location(self, question: str) -> Optional[str]:
+        """Extract city/location from market question."""
+        # Common cities in Kalshi weather markets
+        cities = [
+            "New York",
+            "NYC",
+            "Central Park",
+            "Chicago",
+            "Miami",
+            "Austin",
+            "Los Angeles",
+            "LA",
+            "Boston",
+            "Seattle",
+            "San Francisco",
+            "Washington DC",
+            "Denver",
+        ]
+
+        question_lower = question.lower()
+        for city in cities:
+            if city.lower() in question_lower:
+                return city
+
+        return None
+
+    def _extract_temperature(self, question: str) -> Optional[float]:
+        """Extract temperature threshold from question."""
+        import re
+
+        # Look for patterns like "70°F", "70 degrees", "70F", or ranges "51° to 52°"
+        patterns = [
+            r"(\d+\.?\d*)\s*°?[fF]",  # 70F or 70°F
+            r"(\d+\.?\d*)\s*°?[cC]",  # 20C or 20°C
+            r"(\d+\.?\d*)\s*degrees",  # 70 degrees
+            r"(\d+\.?\d*)\s*°",  # 70°
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, question)
+            if match:
+                return float(match.group(1))
+
+        return None
+
+    def _extract_weather_type(self, question: str) -> Optional[str]:
+        """Extract weather event type from question."""
+        question_lower = question.lower()
+
+        if "temperature" in question_lower or "degrees" in question_lower or "high" in question_lower or "low" in question_lower:
+            return "temperature"
+        elif "rain" in question_lower or "precipitation" in question_lower:
+            return "precipitation"
+        elif "snow" in question_lower:
+            return "snow"
+        else:
+            return "other"

@@ -37,6 +37,11 @@ class Config(BaseSettings):
     telegram_bot_token: Optional[str] = Field(None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: Optional[str] = Field(None, alias="TELEGRAM_CHAT_ID")
 
+    # Kalshi API
+    kalshi_email: Optional[str] = Field(None, alias="KALSHI_EMAIL")
+    kalshi_password: Optional[str] = Field(None, alias="KALSHI_PASSWORD")
+    kalshi_use_demo: bool = Field(False, alias="KALSHI_USE_DEMO")
+
     # Trading Parameters
     max_position_size_usdc: float = Field(5.0, alias="MAX_POSITION_SIZE_USDC")
     min_edge_threshold: float = Field(0.05, alias="MIN_EDGE_THRESHOLD")
