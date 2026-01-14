@@ -347,11 +347,35 @@ class KalshiClient:
         Returns:
             List of series ticker strings for high/low temperature markets
         """
-        # Use known temperature series patterns
-        # Kalshi uses patterns like KXHIGH-{date} and KXLOW-{date} for daily temperature
-        known_patterns = ["KXHIGH", "KXLOW", "KCHIGH", "KCLOW"]
+        # Try fetching first to see what series exist
+        try:
+            response = self._make_request("GET", "/markets", params={"limit": 200, "status": "open"})
+            if response and response.status_code == 200:
+                data = response.json()
+                markets = data.get("markets", [])
 
-        self.logger.info(f"Using known temperature series patterns: {known_patterns}")
+                # Extract unique series from market tickers
+                series_set = set()
+                for m in markets:
+                    ticker = m.get("ticker", "")
+                    # Series is usually before the first dash
+                    if "-" in ticker:
+                        series = ticker.split("-")[0]
+                        title = m.get("title", "").lower()
+                        if ("temp" in title or "temperature" in title) and ("high" in title or "low" in title):
+                            series_set.add(series)
+                            self.logger.info(f"Found temp series from market: {series} ({m.get('title', '')[:50]})")
+
+                if series_set:
+                    result = list(series_set)
+                    self.logger.info(f"Discovered {len(result)} temperature series from markets: {result}")
+                    return result
+        except Exception as e:
+            self.logger.warning(f"Could not discover series from markets: {e}")
+
+        # Fallback to known patterns
+        known_patterns = ["KXHIGH", "KXLOW", "KCHIGH", "KCLOW"]
+        self.logger.info(f"Using fallback temperature series patterns: {known_patterns}")
         return known_patterns
 
     def get_weather_markets_direct(self, limit: int = 200) -> List[Dict[str, Any]]:
@@ -393,8 +417,14 @@ class KalshiClient:
                     markets = data.get("markets", [])
                     all_weather_markets.extend(markets)
                     self.logger.info(f"  Found {len(markets)} {series} markets")
+                    if len(markets) == 0:
+                        self.logger.debug(f"  API response for {series}: {data}")
                 else:
                     self.logger.warning(f"  Error fetching {series}: {response.status_code}")
+                    try:
+                        self.logger.debug(f"  Response: {response.text[:200]}")
+                    except:
+                        pass
 
                 time.sleep(0.2)  # Rate limiting
 
