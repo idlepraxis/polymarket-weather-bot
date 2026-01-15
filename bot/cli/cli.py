@@ -13,6 +13,7 @@ from rich import box
 
 from bot.application.trader import WeatherTrader
 from bot.application.extreme_value_strategy import ExtremeValueStrategy
+from bot.application.bot_runner import BotRunner
 from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.kalshi import KalshiClient
 from bot.connectors.weather import WeatherConnector
@@ -753,6 +754,189 @@ def stats(
 
             console.print(table)
             console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command(name="bot-start")
+def bot_start(
+    platform: str = typer.Option("kalshi", help="Platform: polymarket or kalshi"),
+    simulation: bool = typer.Option(True, "--simulation/--live", help="Run in simulation mode"),
+):
+    """Start the automated trading bot.
+
+    The bot will:
+    - Scan for opportunities every 6 hours
+    - Execute trades automatically (20-30 per day max)
+    - Check for market resolutions every hour
+    - Update P&L automatically
+    - Apply risk management (max 5% daily exposure)
+    """
+    try:
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "red"
+
+        console.print(f"\n[{mode_color} bold]Starting {mode} Bot on {platform.upper()}[/{mode_color} bold]\n")
+
+        if not simulation:
+            confirm = typer.confirm("⚠️  Start LIVE trading with real funds?")
+            if not confirm:
+                raise typer.Exit(0)
+
+        # Initialize and start bot
+        bot = BotRunner(platform=platform, simulation=simulation)
+
+        console.print("[green]Bot started successfully![/green]")
+        console.print("\nConfiguration:")
+        console.print(f"  Platform: {platform.upper()}")
+        console.print(f"  Mode: {mode}")
+        console.print(f"  Scan interval: 6 hours")
+        console.print(f"  Max trades/scan: 20")
+        console.print(f"  Max trades/day: 50")
+        console.print(f"  Max exposure/day: 5% of bankroll")
+        console.print(f"  Resolution checks: Every 1 hour")
+        console.print("\nCommands:")
+        console.print("  python bot.py bot-status   - Check bot status and P&L")
+        console.print("  python bot.py bot-stop     - Stop the bot")
+        console.print("  Ctrl+C                     - Stop the bot")
+        console.print()
+
+        # Start bot (blocking)
+        bot.start()
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Bot stopped by user[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command(name="bot-stop")
+def bot_stop():
+    """Stop the running bot."""
+    try:
+        bot = BotRunner()
+
+        if not bot.is_running():
+            console.print("[yellow]Bot is not running[/yellow]")
+            return
+
+        bot.stop()
+        console.print("[green]Bot stopped successfully[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command(name="bot-status")
+def bot_status(
+    simulation: bool = typer.Option(False, "--simulation", help="Show simulation status"),
+    platform: str = typer.Option("kalshi", help="Platform to check"),
+):
+    """Show comprehensive bot status and performance.
+
+    Displays:
+    - Bot running status
+    - Today's trading activity
+    - P&L summary (total, win rate, ROI)
+    - Open positions
+    - Recent trades
+    - Win rate and average edge
+    """
+    try:
+        trade_db = TradeHistoryDB()
+
+        # Get P&L summary
+        pnl_stats = trade_db.get_pnl_summary(simulation=simulation, platform=platform)
+
+        # Get open trades
+        open_trades = trade_db.get_open_trades(simulation=simulation, platform=platform)
+
+        # Get recent trades
+        recent_trades = trade_db.get_trades(simulation=simulation, platform=platform, limit=5)
+
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "green"
+
+        # Header
+        console.print(f"\n[{mode_color} bold]Bot Status - {mode} Mode ({platform.upper()})[/{mode_color} bold]\n")
+
+        # Main stats table
+        table = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED, title="Performance Summary")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", justify="right")
+
+        # Trading stats
+        table.add_row("Total Trades", str(pnl_stats['total_trades']))
+        table.add_row("Open Positions", str(len(open_trades)))
+        table.add_row("Win Rate", f"{pnl_stats['win_rate']:.1f}%")
+        table.add_row("", "")
+
+        # P&L
+        pnl_color = "green" if pnl_stats['realized_pnl'] >= 0 else "red"
+        roi_color = "green" if pnl_stats['roi'] >= 0 else "red"
+
+        table.add_row("Realized P&L", f"[{pnl_color}]${pnl_stats['realized_pnl']:.2f}[/{pnl_color}]")
+        table.add_row("Total Invested", f"${pnl_stats['total_invested']:.2f}")
+        table.add_row("ROI", f"[{roi_color}]{pnl_stats['roi']:.1f}%[/{roi_color}]")
+        table.add_row("", "")
+
+        # Trade quality
+        avg_pnl_color = "green" if pnl_stats['avg_pnl_per_trade'] >= 0 else "red"
+        table.add_row("Avg P&L/Trade", f"[{avg_pnl_color}]${pnl_stats['avg_pnl_per_trade']:.2f}[/{avg_pnl_color}]")
+        table.add_row("Best Trade", f"[green]${pnl_stats['best_trade']:.2f}[/green]")
+        table.add_row("Worst Trade", f"[red]${pnl_stats['worst_trade']:.2f}[/red]")
+        table.add_row("", "")
+
+        # Strategy metrics
+        table.add_row("Avg Entry Price", f"{pnl_stats['avg_entry_price']:.1%}")
+        table.add_row("Avg Edge", f"{pnl_stats['avg_edge']:.1%}")
+
+        console.print(table)
+        console.print()
+
+        # Recent trades
+        if recent_trades:
+            console.print("[bold]Recent Trades:[/bold]\n")
+
+            trades_table = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+            trades_table.add_column("Date", style="dim")
+            trades_table.add_column("Side", style="yellow")
+            trades_table.add_column("Price", justify="right")
+            trades_table.add_column("Size", justify="right")
+            trades_table.add_column("P&L", justify="right")
+            trades_table.add_column("Question", max_width=40)
+
+            for trade in recent_trades[:5]:
+                timestamp = datetime.fromisoformat(trade['timestamp'])
+                date_str = timestamp.strftime("%m/%d %H:%M")
+
+                if trade['resolved']:
+                    pnl = trade['pnl']
+                    pnl_color = "green" if pnl >= 0 else "red"
+                    pnl_str = f"[{pnl_color}]${pnl:.2f}[/{pnl_color}]"
+                else:
+                    pnl_str = "[dim]pending[/dim]"
+
+                trades_table.add_row(
+                    date_str,
+                    trade['side'],
+                    f"{trade['price']:.1%}",
+                    f"${trade['size']:.2f}",
+                    pnl_str,
+                    trade['question'][:37] + "..." if len(trade['question']) > 40 else trade['question']
+                )
+
+            console.print(trades_table)
+            console.print()
+
+        # Open positions summary
+        if open_trades:
+            total_at_risk = sum(t['cost'] for t in open_trades)
+            console.print(f"[yellow]Open Positions:[/yellow] {len(open_trades)} trades, ${total_at_risk:.2f} at risk\n")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
