@@ -15,21 +15,21 @@ load_dotenv()
 class Config(BaseSettings):
     """Bot configuration from environment variables."""
 
-    # Blockchain & Wallet
-    polygon_wallet_private_key: str = Field(..., alias="POLYGON_WALLET_PRIVATE_KEY")
+    # Blockchain & Wallet (Polymarket only - optional for Kalshi)
+    polygon_wallet_private_key: Optional[str] = Field(None, alias="POLYGON_WALLET_PRIVATE_KEY")
     wallet_address: Optional[str] = Field(None, alias="WALLET_ADDRESS")
 
-    # Chainstack Configuration
-    chainstack_rpc_url: str = Field(..., alias="CHAINSTACK_RPC_URL")
-    chainstack_ws_url: str = Field(..., alias="CHAINSTACK_WS_URL")
+    # Chainstack Configuration (Polymarket only - optional for Kalshi)
+    chainstack_rpc_url: Optional[str] = Field(None, alias="CHAINSTACK_RPC_URL")
+    chainstack_ws_url: Optional[str] = Field(None, alias="CHAINSTACK_WS_URL")
 
-    # Polymarket API
+    # Polymarket API (optional)
     clob_api_key: Optional[str] = Field(None, alias="CLOB_API_KEY")
     clob_secret: Optional[str] = Field(None, alias="CLOB_SECRET")
     clob_pass_phrase: Optional[str] = Field(None, alias="CLOB_PASS_PHRASE")
 
-    # Weather APIs
-    openweather_api_key: str = Field(..., alias="OPENWEATHER_API_KEY")
+    # Weather APIs (optional - only needed for forecast-based strategy)
+    openweather_api_key: Optional[str] = Field(None, alias="OPENWEATHER_API_KEY")
     weatherapi_key: Optional[str] = Field(None, alias="WEATHERAPI_KEY")
     noaa_api_key: Optional[str] = Field(None, alias="NOAA_API_KEY")
 
@@ -122,17 +122,24 @@ class Config(BaseSettings):
         return not self.simulation_mode
 
     def validate_required_fields(self) -> list[str]:
-        """Validate required configuration fields and return missing ones."""
+        """Validate required configuration fields and return missing ones.
+
+        Note: This only validates platform-specific requirements.
+        For Kalshi-only trading, Polymarket fields are not required.
+        """
         missing = []
 
-        if not self.polygon_wallet_private_key:
-            missing.append("POLYGON_WALLET_PRIVATE_KEY")
-        if not self.chainstack_rpc_url:
-            missing.append("CHAINSTACK_RPC_URL")
-        if not self.chainstack_ws_url:
-            missing.append("CHAINSTACK_WS_URL")
-        if not self.openweather_api_key:
-            missing.append("OPENWEATHER_API_KEY")
+        # Kalshi credentials (if using Kalshi)
+        # At least one auth method required
+        has_api_key = self.kalshi_api_key_id and self.kalshi_api_private_key
+        has_password = self.kalshi_email and self.kalshi_password
+
+        if not (has_api_key or has_password):
+            # Neither auth method available - this is fine if only using Polymarket
+            pass
+
+        # Polymarket credentials (if using Polymarket)
+        # These are optional - only validated if explicitly using Polymarket
 
         return missing
 
