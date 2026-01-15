@@ -65,6 +65,15 @@ class Config(BaseSettings):
     position_size_pct: float = Field(0.01, alias="POSITION_SIZE_PCT")
     stop_loss_pct: float = Field(0.50, alias="STOP_LOSS_PCT")
 
+    # Bot Runner Configuration
+    bankroll: float = Field(1000.0, alias="BANKROLL")
+    scan_interval_hours: int = Field(6, alias="SCAN_INTERVAL_HOURS")
+    max_trades_per_scan: int = Field(20, alias="MAX_TRADES_PER_SCAN")
+    max_trades_per_day: int = Field(50, alias="MAX_TRADES_PER_DAY")
+    max_trades_per_city: int = Field(3, alias="MAX_TRADES_PER_CITY")
+    max_daily_exposure_pct: float = Field(5.0, alias="MAX_DAILY_EXPOSURE_PCT")
+    resolution_check_hours: int = Field(1, alias="RESOLUTION_CHECK_HOURS")
+
     # Bot Behavior
     poll_interval_minutes: int = Field(15, alias="POLL_INTERVAL_MINUTES")
     simulation_mode: bool = Field(True, alias="SIMULATION_MODE")
