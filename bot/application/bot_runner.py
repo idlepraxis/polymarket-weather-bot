@@ -272,6 +272,9 @@ class BotRunner:
                     )
 
                 # Create and log trade
+                # For Kalshi: count = signal.size / signal.price contracts
+                # Actual cost = count * signal.price ≈ signal.size (with rounding)
+                # For accuracy, just use signal.size as it's already the dollar amount
                 trade = Trade(
                     trade_id=order_id or f"sim_{signal.market.market_id}_{int(time.time())}",
                     timestamp=datetime.now(timezone.utc),
@@ -281,7 +284,7 @@ class BotRunner:
                     side=TradeSide.BUY,
                     price=signal.price,
                     size=signal.size,
-                    cost=signal.size * signal.price,
+                    cost=signal.size,  # Fixed: signal.size is already the dollar amount
                     simulation=self.simulation,
                     tx_hash=order_id,
                     status="executed",
