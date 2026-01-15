@@ -1,7 +1,8 @@
 """CLI interface for the Polymarket Weather Bot."""
 
 import time
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import typer
@@ -15,8 +16,10 @@ from bot.application.extreme_value_strategy import ExtremeValueStrategy
 from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.kalshi import KalshiClient
 from bot.connectors.weather import WeatherConnector
+from bot.database.trade_history import TradeHistoryDB
 from bot.utils.config import Config, get_config
 from bot.utils.logger import setup_logger, get_logger
+from bot.utils.models import Trade, TradeSide
 
 app = typer.Typer(
     name="polymarket-weather-bot",
@@ -502,6 +505,9 @@ def extreme_trade(
 
         console.print(f"Found {len(signals)} opportunities, executing top {max_trades}...")
 
+        # Initialize trade history database
+        trade_db = TradeHistoryDB()
+
         executed = 0
         for signal in signals[:max_trades]:
             try:
@@ -529,6 +535,27 @@ def extreme_trade(
                     )
 
                 executed += 1
+
+                # Create Trade object and log to database
+                trade = Trade(
+                    trade_id=order_id or str(uuid.uuid4()),
+                    timestamp=datetime.now(timezone.utc),
+                    market_id=signal.market.market_id,
+                    question=signal.market.question,
+                    token_id=signal.token_id,
+                    side=TradeSide.BUY,  # Both platforms are buying in this strategy
+                    price=signal.price,
+                    size=signal.size,
+                    cost=signal.size * signal.price,
+                    simulation=dry_run,
+                    tx_hash=order_id,
+                    status="executed",
+                    fair_probability=signal.fair_probability,
+                    edge=signal.edge,
+                    reasoning=signal.reasoning
+                )
+
+                trade_db.log_trade(trade, platform=platform)
 
                 # Display action properly for each platform
                 if platform.lower() == "kalshi":
@@ -563,6 +590,173 @@ def version():
     console.print("Author: [blue]@idlepraxis[/blue]")
     console.print("Strategies: [yellow]Forecast Arbitrage + Extreme Value Betting[/yellow]")
     console.print()
+
+
+@app.command()
+def pnl(
+    simulation: bool = typer.Option(False, "--simulation", help="Show simulation trades P&L"),
+    platform: Optional[str] = typer.Option(None, "--platform", help="Filter by platform (polymarket, kalshi)"),
+):
+    """View profit & loss summary."""
+    try:
+        trade_db = TradeHistoryDB()
+        stats = trade_db.get_pnl_summary(simulation=simulation, platform=platform)
+
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "green"
+        platform_text = f" ({platform.upper()})" if platform else " (ALL PLATFORMS)"
+
+        console.print(f"\n[{mode_color} bold]{mode} Trading P&L{platform_text}[/{mode_color} bold]\n")
+
+        # Create summary table
+        table = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", justify="right")
+
+        table.add_row("Total Trades", str(stats['total_trades']))
+        table.add_row("Winning Trades", f"[green]{stats['winning_trades']}[/green]")
+        table.add_row("Losing Trades", f"[red]{stats['losing_trades']}[/red]")
+        table.add_row("Win Rate", f"{stats['win_rate']:.1f}%")
+        table.add_row("", "")  # Spacer
+
+        # P&L metrics
+        pnl_color = "green" if stats['realized_pnl'] >= 0 else "red"
+        roi_color = "green" if stats['roi'] >= 0 else "red"
+
+        table.add_row("Realized P&L", f"[{pnl_color}]${stats['realized_pnl']:.2f}[/{pnl_color}]")
+        table.add_row("Total Invested", f"${stats['total_invested']:.2f}")
+        table.add_row("ROI", f"[{roi_color}]{stats['roi']:.1f}%[/{roi_color}]")
+        table.add_row("", "")  # Spacer
+
+        # Trade metrics
+        avg_color = "green" if stats['avg_pnl_per_trade'] >= 0 else "red"
+        best_color = "green" if stats['best_trade'] >= 0 else "red"
+        worst_color = "green" if stats['worst_trade'] >= 0 else "red"
+
+        table.add_row("Avg P&L per Trade", f"[{avg_color}]${stats['avg_pnl_per_trade']:.2f}[/{avg_color}]")
+        table.add_row("Best Trade", f"[{best_color}]${stats['best_trade']:.2f}[/{best_color}]")
+        table.add_row("Worst Trade", f"[{worst_color}]${stats['worst_trade']:.2f}[/{worst_color}]")
+        table.add_row("", "")  # Spacer
+
+        # Strategy metrics
+        table.add_row("Avg Entry Price", f"{stats['avg_entry_price']:.1%}")
+        table.add_row("Avg Edge", f"{stats['avg_edge']:.1%}")
+
+        console.print(table)
+        console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def trades(
+    simulation: bool = typer.Option(False, "--simulation", help="Show simulation trades"),
+    platform: Optional[str] = typer.Option(None, "--platform", help="Filter by platform"),
+    limit: int = typer.Option(20, help="Number of trades to show"),
+):
+    """View recent trades."""
+    try:
+        trade_db = TradeHistoryDB()
+        trade_list = trade_db.get_trades(simulation=simulation, platform=platform, limit=limit)
+
+        if not trade_list:
+            console.print("[yellow]No trades found[/yellow]")
+            return
+
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "green"
+
+        console.print(f"\n[{mode_color} bold]Recent {mode} Trades[/{mode_color} bold]\n")
+
+        # Create trades table
+        table = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        table.add_column("Date", style="cyan")
+        table.add_column("Platform", style="magenta")
+        table.add_column("Side", style="yellow")
+        table.add_column("Price", justify="right")
+        table.add_column("Size", justify="right")
+        table.add_column("Cost", justify="right")
+        table.add_column("P&L", justify="right")
+        table.add_column("Question", style="dim", max_width=40)
+
+        for trade in trade_list:
+            timestamp = datetime.fromisoformat(trade['timestamp'])
+            date_str = timestamp.strftime("%m/%d %H:%M")
+
+            # P&L display
+            if trade['resolved']:
+                pnl = trade['pnl']
+                pnl_color = "green" if pnl >= 0 else "red"
+                pnl_str = f"[{pnl_color}]${pnl:.2f}[/{pnl_color}]"
+            else:
+                pnl_str = "[dim]pending[/dim]"
+
+            table.add_row(
+                date_str,
+                trade['platform'].upper(),
+                trade['side'],
+                f"{trade['price']:.1%}",
+                f"${trade['size']:.2f}",
+                f"${trade['cost']:.2f}",
+                pnl_str,
+                trade['question'][:37] + "..." if len(trade['question']) > 40 else trade['question']
+            )
+
+        console.print(table)
+        console.print(f"\nShowing {len(trade_list)} most recent trades")
+        console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def stats(
+    simulation: bool = typer.Option(False, "--simulation", help="Show simulation stats"),
+):
+    """View statistics by platform."""
+    try:
+        trade_db = TradeHistoryDB()
+        platform_stats = trade_db.get_stats_by_platform(simulation=simulation)
+
+        if not platform_stats:
+            console.print("[yellow]No trades found[/yellow]")
+            return
+
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "green"
+
+        console.print(f"\n[{mode_color} bold]{mode} Trading Statistics by Platform[/{mode_color} bold]\n")
+
+        for platform, stats in platform_stats.items():
+            table = Table(
+                title=f"[bold magenta]{platform.upper()}[/bold magenta]",
+                show_header=True,
+                header_style="bold cyan",
+                box=box.ROUNDED
+            )
+            table.add_column("Metric", style="cyan")
+            table.add_column("Value", justify="right")
+
+            table.add_row("Total Trades", str(stats['total_trades']))
+            table.add_row("Win Rate", f"{stats['win_rate']:.1f}%")
+
+            pnl_color = "green" if stats['realized_pnl'] >= 0 else "red"
+            roi_color = "green" if stats['roi'] >= 0 else "red"
+
+            table.add_row("Realized P&L", f"[{pnl_color}]${stats['realized_pnl']:.2f}[/{pnl_color}]")
+            table.add_row("ROI", f"[{roi_color}]{stats['roi']:.1f}%[/{roi_color}]")
+            table.add_row("Avg Entry Price", f"{stats['avg_entry_price']:.1%}")
+
+            console.print(table)
+            console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
