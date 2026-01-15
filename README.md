@@ -1,59 +1,28 @@
 # Polymarket Weather Bot
 
-Automated trading bot for Polymarket weather prediction markets using Chainstack infrastructure.
+**Automated trading bot for prediction market weather trading using extreme value betting strategy.**
 
-## ⚡ Two Profitable Strategies
-
-### 1. 🎯 **Extreme Value Betting** (RECOMMENDED - 500-1,800% ROI)
-
-**The strategy that actually works.** Based on real trader performance: $25,700 profit from 1,420 trades.
-
-- Buy YES shares ONLY when < 10-15¢
-- Buy NO shares ONLY when YES > 40-50¢
-- Small positions ($0.50-$1), high volume, asymmetric payoffs
-- **Real results:** $18/trade average profit, 21x max return
-
-📖 **[Read Full Strategy Guide →](EXTREME_VALUE_STRATEGY.md)**
-
-```bash
-# Scan for extreme value opportunities
-python bot.py extreme-scan
-
-# Execute trades (simulation)
-python bot.py extreme-trade --dry-run
-```
-
-### 2. 🔮 **Forecast Arbitrage** (50-100% ROI)
-
-Traditional approach using ensemble weather forecasts to identify mispriced markets.
-
-- Combines multiple weather APIs for accuracy
-- Calculates fair probabilities vs market prices
-- Kelly Criterion position sizing
-- Good for learning, lower but consistent returns
-
-```bash
-# Original forecast-based strategy
-python bot.py scan
-python bot.py trade-once --dry-run
-```
-
-**Recommendation:** Start with Extreme Value strategy for higher returns, use forecasts as confirmation.
+> 🤖 **Current Status:** Fully operational with automated bot runner, P&L tracking, and multi-platform support (Kalshi + Polymarket)
 
 ---
 
-## Features
+## 🎯 Strategy: Extreme Value Betting
 
-- 🌤️ **Weather Market Scanning**: Automatically identifies temperature and weather-related prediction markets
-- 🎯 **Extreme Value Detection**: Finds severely mispriced shares (<15¢ or >85¢)
-- 🔮 **Ensemble Forecasting**: Combines multiple weather APIs (OpenWeather, WeatherAPI, NOAA) for accurate predictions
-- 💰 **Risk Management**: Smart position sizing, daily trade limits, stop-loss protection
-- 🔐 **Chainstack Integration**: Uses private Polygon node for fast, secure blockchain access
-- 🧪 **Simulation Mode**: Test strategies risk-free before going live
-- 📊 **Portfolio Tracking**: Track positions, P&L, and performance metrics
-- 🎨 **Rich CLI**: Beautiful command-line interface with tables and colors
+The bot uses a **high-volume, extreme value strategy** based on successful trader analysis ($25,700 profit from 1,420 trades):
 
-## Quick Start
+- **Buy YES** when price < 10-15¢
+- **Buy NO** when YES > 40-50¢
+- **Small positions** (~$1 per trade)
+- **High volume** (20-30 trades/day)
+- **Asymmetric payoffs** (risk $0.10 to win $0.90)
+
+This exploits market mispricings through volume and asymmetric risk/reward ratios, not weather forecasting.
+
+📖 **[Read Full Strategy Guide →](EXTREME_VALUE_STRATEGY.md)**
+
+---
+
+## ⚡ Quick Start
 
 ### 1. Installation
 
@@ -62,318 +31,559 @@ python bot.py trade-once --dry-run
 git clone https://github.com/idlepraxis/polymarket-weather-bot.git
 cd polymarket-weather-bot
 
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 # Install dependencies
 pip install -r requirements.txt
 ```
 
 ### 2. Configuration
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Copy `.env.example` to `.env` and add your credentials:
 
 ```bash
 cp .env.example .env
 ```
 
-Required configuration:
-- `POLYGON_WALLET_PRIVATE_KEY`: Your Polygon wallet private key
-- `CHAINSTACK_RPC_URL`: Chainstack Polygon RPC endpoint
-- `CHAINSTACK_WS_URL`: Chainstack WebSocket endpoint
-- `OPENWEATHER_API_KEY`: OpenWeatherMap API key (free tier available)
+**Required for Kalshi trading** (recommended):
+```bash
+KALSHI_EMAIL=your_email@example.com
+KALSHI_PASSWORD=your_password
+```
 
-Optional but recommended:
-- `TELEGRAM_BOT_TOKEN`: For trade alerts
-- `WEATHERAPI_KEY`: Additional weather data source
-- `NOAA_API_KEY`: US weather data
+**Optional for Polymarket trading:**
+```bash
+POLYGON_WALLET_PRIVATE_KEY=your_wallet_private_key
+CHAINSTACK_RPC_URL=https://polygon-mainnet.chainstacklabs.com/your_key
+OPENWEATHER_API_KEY=your_openweather_key
+```
 
-### 3. Verify Setup
+**Bot Configuration** (optional, defaults provided):
+```bash
+BANKROLL=1000.0                    # Total capital
+SCAN_INTERVAL_HOURS=6              # How often to scan for trades
+MAX_TRADES_PER_SCAN=20             # Trades per scan cycle
+MAX_TRADES_PER_DAY=50              # Daily trade limit
+MAX_DAILY_EXPOSURE_PCT=5.0         # Max 5% of bankroll at risk per day
+EXTREME_AGGRESSIVE_MAX=1.50        # Max position size ($1.50)
+```
+
+### 3. Start the Bot
+
+**Simulation Mode (recommended first):**
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Start automated bot in simulation mode
+python bot.py bot-start --simulation --platform kalshi
+```
+
+The bot will:
+- Scan for opportunities every 6 hours
+- Execute up to 20 trades per scan
+- Check for resolutions every hour
+- Track all trades in SQLite database
+
+**Live Mode (after validation):**
+```bash
+python bot.py bot-start --platform kalshi
+```
+
+### 4. Monitor Performance
+
+**Check bot status:**
+```bash
+python bot.py bot-status --simulation --platform kalshi
+```
+
+Shows:
+- Total trades executed
+- Win rate and P&L
+- Open positions
+- Recent trades
+- Performance metrics
+
+**View detailed trade history:**
+```bash
+python bot.py trades --simulation --limit 50
+```
+
+**See P&L summary:**
+```bash
+python bot.py pnl --simulation --platform kalshi
+```
+
+### 5. Stop the Bot
 
 ```bash
-python bot.py config-check
+python bot.py bot-stop
 ```
 
-### 4. Run in Simulation Mode
+---
 
+## 📱 Running on a VPS (24/7 Operation)
+
+### Option 1: Tmux (Quick Setup)
+
+**Start the bot in background:**
 ```bash
-# Scan markets without trading
-python bot.py scan
+# Create tmux session
+tmux new -s bot
 
-# Run one trading cycle (simulation)
-python bot.py trade-once --dry-run
+# Inside tmux, start the bot
+source .venv/bin/activate
+python bot.py bot-start --simulation --platform kalshi
 
-# Run continuously (simulation)
-python bot.py run --interval 15 --dry-run
+# Detach from tmux: Press Ctrl+B, then press D
 ```
 
-### 5. Go Live (when ready)
-
+**Check bot status later:**
 ```bash
-# Single cycle with real trades
-python bot.py trade-once --live
+# Reattach to see bot output
+tmux attach -t bot
 
-# Continuous trading
-python bot.py run --interval 15 --live
+# Or check status without attaching
+source .venv/bin/activate
+python bot.py bot-status --simulation --platform kalshi
+
+# Detach again: Ctrl+B, then D
 ```
 
-## CLI Commands
-
-### Status & Monitoring
-
+**Stop the bot:**
 ```bash
-# Check portfolio and recent trades
-python bot.py status
+# Attach to tmux
+tmux attach -t bot
 
-# Check USDC balance
-python bot.py balance
+# Press Ctrl+C to stop bot
+exit
 
-# Verify configuration
-python bot.py config-check
+# Or kill tmux session entirely
+tmux kill-session -t bot
 ```
 
-### Trading
-
+**Tmux useful commands:**
 ```bash
-# Scan markets and show opportunities
-python bot.py scan --limit 10 --min-edge 0.05
-
-# Execute one trading cycle
-python bot.py trade-once [--dry-run|--live]
-
-# Run continuously
-python bot.py run --interval 15 --max-cycles 100 [--dry-run|--live]
+tmux ls                    # List all sessions
+tmux attach -t bot         # Attach to session named "bot"
+tmux kill-session -t bot   # Kill session
 ```
 
-### Options
+### Option 2: Systemd Service (Production)
 
-- `--dry-run`: Simulation mode (default, safe)
-- `--live`: Live trading mode (real money at risk)
-- `--interval N`: Minutes between cycles (default: 15)
-- `--max-cycles N`: Stop after N cycles (0 = unlimited)
-- `--limit N`: Max results to show
-- `--min-edge X`: Minimum edge threshold
-
-## How It Works
-
-### 1. Market Scanning
-The bot scans all Polymarket markets via the Gamma API and filters for weather-related predictions (temperature, rain, snow, etc.).
-
-### 2. Weather Analysis
-For each market:
-- Extracts location, date, and threshold from the market question
-- Fetches weather forecasts from multiple sources
-- Calculates fair probability using ensemble forecasting
-- Applies probabilistic models with uncertainty
-
-### 3. Edge Calculation
+**Create service file:**
+```bash
+sudo nano /etc/systemd/system/trading-bot.service
 ```
-Edge = Fair Probability - Market Price
-```
-Only trades when edge exceeds threshold (default: 5%)
 
-### 4. Position Sizing
-Uses fractional Kelly Criterion:
-```
-Position Size = Bankroll × Position % × (Edge × Confidence)
-```
-With limits:
-- Max position size: $5 (configurable)
-- Max daily trades: 50
-- Max open positions: 20
+**Add configuration:**
+```ini
+[Unit]
+Description=Polymarket Weather Trading Bot
+After=network.target
 
-### 5. Order Execution
-- Uses Polymarket CLOB API for order placement
-- Routes through Chainstack private node for speed and privacy
-- Supports both limit and market orders
-- Includes retry logic for failed transactions
+[Service]
+Type=simple
+User=your_username
+WorkingDirectory=/path/to/polymarket-weather-bot
+Environment="PATH=/path/to/polymarket-weather-bot/.venv/bin"
+ExecStart=/path/to/polymarket-weather-bot/.venv/bin/python bot.py bot-start --simulation --platform kalshi
+Restart=on-failure
+RestartSec=10
 
-## Architecture
+[Install]
+WantedBy=multi-user.target
+```
+
+**Enable and start:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable trading-bot
+sudo systemctl start trading-bot
+
+# Check status
+sudo systemctl status trading-bot
+
+# View logs
+sudo journalctl -u trading-bot -f
+```
+
+---
+
+## 🎮 CLI Commands Reference
+
+### Bot Management
+
+| Command | Description |
+|---------|-------------|
+| `bot-start [--simulation] [--platform kalshi]` | Start automated bot |
+| `bot-status [--simulation] [--platform kalshi]` | Show performance summary |
+| `bot-stop` | Stop running bot |
+
+### Performance Tracking
+
+| Command | Description |
+|---------|-------------|
+| `pnl [--simulation] [--platform kalshi]` | P&L summary |
+| `trades [--simulation] [--limit 50]` | Trade history |
+| `stats [--simulation]` | Detailed statistics |
+
+### Utilities
+
+| Command | Description |
+|---------|-------------|
+| `config-check` | Verify configuration |
+| `balance` | Check USDC balance (Polymarket) |
+| `status` | Check portfolio (Polymarket) |
+
+### Common Options
+
+- `--simulation` / `--sim`: Use simulation mode (no real money)
+- `--platform [kalshi|polymarket]`: Choose trading platform
+- `--limit N`: Limit results shown
+
+---
+
+## 📊 How It Works
+
+### 1. Market Scanning (Every 6 Hours)
+
+```
+┌─────────────┐
+│  Bot Wakes  │
+│   Up Every  │
+│   6 Hours   │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────┐
+│ Fetch All Markets   │
+│ from Kalshi API     │
+│ (72+ weather mkts)  │
+└──────┬──────────────┘
+       │
+       ▼
+┌─────────────────────┐
+│ Filter for Extreme  │
+│ Value Opportunities │
+│ • YES < 15¢         │
+│ • YES > 40¢ (NO)    │
+└──────┬──────────────┘
+       │
+       ▼
+┌─────────────────────┐
+│ Apply Filters:      │
+│ • City diversity    │
+│ • Time to close     │
+│ • Daily limits      │
+└──────┬──────────────┘
+       │
+       ▼
+┌─────────────────────┐
+│ Execute Top 20      │
+│ Trades (~$1 each)   │
+└──────┬──────────────┘
+       │
+       ▼
+┌─────────────────────┐
+│ Log to Database     │
+│ (trade_history.db)  │
+└─────────────────────┘
+```
+
+### 2. Resolution Checking (Every Hour)
+
+```
+┌─────────────┐
+│  Check Open │
+│  Positions  │
+│  Every Hour │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────┐
+│ Query Kalshi API    │
+│ for Market Status   │
+└──────┬──────────────┘
+       │
+       ▼
+┌─────────────────────┐
+│ If Resolved:        │
+│ • Calculate P&L     │
+│ • Update Database   │
+│ • Mark Complete     │
+└─────────────────────┘
+```
+
+### 3. Position Sizing
+
+Based on how cheap the opportunity is:
+
+| Market Price | Position Size | Rationale |
+|--------------|---------------|-----------|
+| ≤ 5¢ | $1.50 (aggressive) | Super cheap, high upside |
+| 5-8¢ | $1.00-1.25 | Very attractive |
+| 8-10¢ | $1.00 | Ideal range |
+| 10-12¢ | $0.75 | Good value |
+| 12-15¢ | $0.50 | Acceptable |
+
+**Average: ~$1.00 per trade**
+
+### 4. Risk Management
+
+- **Daily Exposure:** Max 5% of bankroll ($50 on $1,000)
+- **Position Limit:** Max $1.50 per trade
+- **Trade Limit:** Max 50 trades/day
+- **City Diversification:** Max 3 trades per city
+- **Resolution Time:** Only markets closing within 7 days
+
+---
+
+## 📈 Performance Metrics
+
+The bot tracks comprehensive performance metrics:
+
+### Win Rate Calculation
+```
+Win Rate = (Winning Trades / Total Resolved Trades) × 100%
+```
+
+### P&L Tracking
+```
+Realized P&L = Σ(Winning Trades) - Σ(Losing Trades)
+ROI = (Realized P&L / Total Invested) × 100%
+```
+
+### Expected Results (2-Week Simulation)
+
+Based on strategy analysis with $1,000 bankroll:
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| **Win Rate** | 30-35% | Success threshold |
+| **Total Trades** | 280-420 | 20-30 per day |
+| **Avg Position** | $1.00 | Small positions |
+| **Total Invested** | $280-420 | ~30% of bankroll |
+| **ROI Target** | 50-100%+ | If win rate ≥30% |
+
+**Decision Criteria:**
+- Win rate **> 30%** → GO LIVE with real money
+- Win rate **25-30%** → Adjust parameters, retest
+- Win rate **< 25%** → Strategy not viable, don't go live
+
+---
+
+## 🏗️ Architecture
 
 ```
 bot/
 ├── application/
-│   └── trader.py          # Main trading logic
+│   ├── bot_runner.py          # Automated daemon (main loop)
+│   ├── extreme_value_strategy.py  # Trading strategy logic
+│   └── trader.py              # Legacy forecast-based trading
 ├── connectors/
-│   ├── polymarket.py      # Polymarket + Chainstack integration
-│   └── weather.py         # Weather API connector
-├── utils/
-│   ├── config.py          # Configuration management
-│   ├── logger.py          # Logging utilities
-│   └── models.py          # Pydantic data models
-└── cli/
-    └── cli.py             # Typer CLI interface
+│   ├── kalshi.py              # Kalshi API integration
+│   ├── polymarket.py          # Polymarket + Chainstack
+│   └── weather.py             # Weather API connector (optional)
+├── database/
+│   └── trade_history.py       # P&L tracking system
+├── cli/
+│   └── cli.py                 # Command-line interface
+└── utils/
+    ├── config.py              # Configuration management
+    ├── logger.py              # Logging utilities
+    └── models.py              # Data models
+
+data/
+└── trades.db                  # SQLite database (auto-created)
+
+logs/
+└── bot.log                    # Application logs (auto-created)
 ```
-
-## Configuration Reference
-
-### Trading Parameters
-
-```bash
-MAX_POSITION_SIZE_USDC=5.0       # Max bet per trade
-MIN_EDGE_THRESHOLD=0.05          # Min 5% edge to trade
-MIN_CONFIDENCE=0.70              # Min forecast confidence
-MAX_DAILY_TRADES=50              # Daily trade limit
-MAX_OPEN_POSITIONS=20            # Max concurrent positions
-```
-
-### Risk Management
-
-```bash
-BANKROLL_USDC=1000.0             # Total capital
-POSITION_SIZE_PCT=0.01           # 1% per trade (Kelly)
-STOP_LOSS_PCT=0.50               # Stop if down 50%
-```
-
-### Bot Behavior
-
-```bash
-POLL_INTERVAL_MINUTES=15         # Scan frequency
-SIMULATION_MODE=true             # Safe by default
-LOG_LEVEL=INFO                   # Logging verbosity
-```
-
-## Strategy Details
-
-### Weather Probability Model
-
-For temperature thresholds:
-1. Fetches forecast from multiple sources
-2. Averages predictions (ensemble)
-3. Applies ±5°F uncertainty (normal distribution)
-4. Calculates probability using error function
-
-Example:
-- Forecast: 75°F high
-- Threshold: 70°F
-- Probability = 84% (1 std dev above)
-
-### Trade Selection
-
-Signals ranked by:
-1. **Edge**: Higher is better
-2. **Confidence**: Higher is better
-3. **Liquidity**: Prefer liquid markets
-
-### Exit Strategy
-
-Currently manual exits at resolution. Future enhancements:
-- Auto-close before resolution
-- Stop-loss on unrealized losses
-- Take-profit at target returns
-
-## Risk Warnings
-
-⚠️ **This bot trades real money on prediction markets:**
-
-1. **Market Risk**: Weather forecasts are probabilistic, not guaranteed
-2. **Oracle Risk**: Polymarket uses UMA oracle which could resolve incorrectly
-3. **Liquidity Risk**: Small markets can have high slippage
-4. **Smart Contract Risk**: Bugs in Polymarket contracts could cause losses
-5. **Regulatory Risk**: Prediction markets face regulatory uncertainty
-
-**Always start in simulation mode and test thoroughly before risking real funds.**
-
-## Performance Expectations
-
-Based on analysis of successful traders (e.g., 0xaa7a74...):
-
-- **Expected Win Rate**: 55-65%
-- **Average Edge**: 2-8% per trade
-- **ROI Target**: 50-100% annually on small capital (<$10k)
-- **Daily Trades**: 5-20 on typical days
-- **Position Sizes**: $1-5 per bet (micro-stakes strategy)
-
-**Note**: Past performance does not guarantee future results.
-
-## Development Status
-
-### ✅ Implemented (v1.0)
-- [x] Project structure and configuration
-- [x] Chainstack Polygon integration
-- [x] Weather API connectors (OpenWeather, WeatherAPI)
-- [x] Market scanning and filtering
-- [x] Edge calculation and signal generation
-- [x] Order execution (limit & market)
-- [x] Simulation mode
-- [x] Portfolio tracking
-- [x] Risk management (position sizing, limits)
-- [x] CLI interface with Rich formatting
-- [x] Logging and error handling
-
-### 🚧 Planned (v1.1)
-- [ ] Telegram alerts integration
-- [ ] Position management (auto-close, monitoring)
-- [ ] Advanced weather models (ML, NOAA full integration)
-- [ ] Backtesting framework
-- [ ] Performance analytics dashboard
-- [ ] Database storage (SQLite/Postgres)
-
-### 🔮 Future (v2.0)
-- [ ] Multi-market support (non-weather markets)
-- [ ] Market making strategies
-- [ ] Arbitrage detection
-- [ ] Web UI for monitoring
-- [ ] Docker deployment
-
-## Troubleshooting
-
-### Connection Errors
-
-```bash
-# Test Chainstack connection
-curl -X POST $CHAINSTACK_RPC_URL \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-```
-
-### Weather API Issues
-
-```bash
-# Test OpenWeather API
-curl "http://api.openweathermap.org/data/2.5/weather?q=New%20York&appid=$OPENWEATHER_API_KEY"
-```
-
-### Low Trade Volume
-
-- Decrease `MIN_EDGE_THRESHOLD` (e.g., 0.03 instead of 0.05)
-- Increase `POLL_INTERVAL_MINUTES` to scan more frequently
-- Add more weather APIs for better ensemble forecasts
-
-### High Error Rate
-
-- Check logs in `./logs/` directory
-- Verify API keys are valid
-- Ensure sufficient USDC balance
-- Check Polygon network status
-
-## Contributing
-
-Contributions welcome! Areas for improvement:
-
-1. **Weather Models**: Better probability calculations
-2. **Market Parsing**: Improved question parsing
-3. **Exit Strategies**: Position management logic
-4. **Testing**: Unit and integration tests
-5. **Documentation**: More examples and guides
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Disclaimer
-
-This software is for educational and research purposes only. The authors are not responsible for any financial losses incurred through the use of this bot. Prediction market trading carries significant risk and may not be legal in all jurisdictions. Consult with legal and financial advisors before trading.
-
-## Support
-
-- **Issues**: https://github.com/idlepraxis/polymarket-weather-bot/issues
-- **Author**: [@idlepraxis](https://github.com/idlepraxis)
-
-## Acknowledgments
-
-- Polymarket team for the platform and APIs
-- Chainstack for reliable Polygon infrastructure
-- Weather API providers (OpenWeather, WeatherAPI, NOAA)
-- Inspired by successful traders like gopfan2 and 0xaa7a74...
 
 ---
 
-Built with ❤️ for the Polymarket community
+## 🔧 Configuration Reference
+
+### Trading Strategy Parameters
+
+```bash
+# Position Sizing (target ~$1 avg per trade)
+EXTREME_MIN_POSITION=0.50           # Minimum bet
+EXTREME_MAX_POSITION=1.00           # Standard bet
+EXTREME_AGGRESSIVE_MAX=1.50         # Maximum bet
+
+# Entry Thresholds
+EXTREME_YES_MAX_PRICE=0.15          # Buy YES if < 15¢
+EXTREME_YES_IDEAL_PRICE=0.10        # Ideal YES price: 10¢
+EXTREME_NO_MIN_YES_PRICE=0.40       # Buy NO if YES > 40¢
+EXTREME_NO_IDEAL_YES_PRICE=0.50     # Ideal NO entry: YES @ 50¢
+```
+
+### Bot Runner Configuration
+
+```bash
+# Scanning & Trading
+BANKROLL=1000.0                     # Total capital
+SCAN_INTERVAL_HOURS=6               # Scan every 6 hours
+MAX_TRADES_PER_SCAN=20              # Trades per scan
+MAX_TRADES_PER_DAY=50               # Daily limit
+MAX_TRADES_PER_CITY=3               # City diversification
+
+# Risk Management
+MAX_DAILY_EXPOSURE_PCT=5.0          # Max 5% daily exposure
+RESOLUTION_CHECK_HOURS=1            # Check resolutions hourly
+```
+
+### Platform Configuration
+
+```bash
+# Kalshi (Recommended)
+KALSHI_EMAIL=your_email@example.com
+KALSHI_PASSWORD=your_password
+KALSHI_API_BASE=https://trading-api.kalshi.com/trade-api/v2
+
+# Polymarket (Optional)
+POLYGON_WALLET_PRIVATE_KEY=0x...
+CHAINSTACK_RPC_URL=https://polygon-mainnet...
+OPENWEATHER_API_KEY=your_key
+```
+
+---
+
+## 🚨 Risk Warnings
+
+⚠️ **This bot trades real money on prediction markets:**
+
+1. **Market Risk**: Extreme value betting requires high volume to be profitable. Individual trades have negative expected value by design.
+2. **Validation Required**: **ALWAYS run 2-week simulation first** to validate win rate before risking real money.
+3. **Oracle Risk**: Market resolutions could be incorrect or disputed.
+4. **Liquidity Risk**: Small markets can have high slippage and low liquidity.
+5. **API Risk**: API outages or rate limits could prevent trading.
+6. **Regulatory Risk**: Prediction markets face regulatory uncertainty in many jurisdictions.
+
+**Always start in simulation mode and validate performance before going live.**
+
+---
+
+## 📚 Additional Documentation
+
+- **[Extreme Value Strategy Guide](EXTREME_VALUE_STRATEGY.md)** - Full strategy explanation
+- **[P&L Tracking Guide](PNL_TRACKING.md)** - Database schema and tracking
+- **[Simulation Guide](SIMULATION_GUIDE.md)** - 2-week validation process
+- **[Architecture Map](ARCHITECTURE.md)** - Complete technical documentation
+- **[Trader Analysis](TRADER_ANALYSIS.md)** - Successful trader patterns
+
+---
+
+## 🐛 Troubleshooting
+
+### Bot won't start
+
+```bash
+# Check config
+python bot.py config-check
+
+# Check virtual environment
+which python  # Should show .venv/bin/python
+
+# Reinstall dependencies
+pip install -r requirements.txt
+```
+
+### Can't see bot output in tmux
+
+```bash
+# Attach to tmux session
+tmux attach -t bot
+
+# Or check status without attaching
+python bot.py bot-status --simulation
+```
+
+### Virtual environment not activated
+
+```bash
+# You'll see: ModuleNotFoundError: No module named 'typer'
+# Fix: Always activate venv first
+source .venv/bin/activate
+```
+
+### Database errors
+
+```bash
+# Reset simulation (deletes all simulation trades)
+python scripts/reset_simulation.py --confirm
+
+# Fix trade costs (if needed)
+python scripts/fix_trade_costs.py
+```
+
+### Low win rate in simulation
+
+- Check if daily trade limits are too restrictive
+- Verify position sizes are correct (~$1 avg)
+- Review recent trades for quality: `python bot.py trades --simulation --limit 20`
+- Consider adjusting entry thresholds in `.env`
+
+---
+
+## 📝 Development Status
+
+### ✅ Implemented (v2.1)
+- [x] Multi-platform support (Kalshi + Polymarket)
+- [x] Automated bot runner with daemon mode
+- [x] P&L tracking with SQLite database
+- [x] Automatic resolution checking
+- [x] City diversification and risk management
+- [x] Simplified CLI commands
+- [x] VPS deployment support (tmux + systemd)
+- [x] Position sizing optimization
+- [x] Trade history and performance analytics
+
+### 🚧 Future Enhancements
+- [ ] Web dashboard for monitoring
+- [ ] Telegram notifications
+- [ ] Advanced backtesting framework
+- [ ] Machine learning for entry optimization
+- [ ] Multi-account support
+- [ ] Docker deployment
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Areas for improvement:
+
+1. **Strategy Optimization**: Better entry/exit criteria
+2. **Risk Management**: Advanced position sizing algorithms
+3. **Performance**: Faster market scanning
+4. **Monitoring**: Real-time dashboards
+5. **Testing**: Unit and integration tests
+
+---
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+---
+
+## ⚠️ Disclaimer
+
+This software is for educational and research purposes only. The authors are not responsible for any financial losses incurred through the use of this bot. Prediction market trading carries significant risk and may not be legal in all jurisdictions. Consult with legal and financial advisors before trading.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Kalshi** for prediction market API
+- **Polymarket** for decentralized prediction markets
+- **Chainstack** for Polygon infrastructure
+- Inspired by successful traders: gopfan2, 0xaa7a74...
+
+---
+
+**Built with ❤️ for the prediction market community**
