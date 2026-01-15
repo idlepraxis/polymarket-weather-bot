@@ -56,9 +56,10 @@ class Config(BaseSettings):
     extreme_yes_ideal_price: float = Field(0.10, alias="EXTREME_YES_IDEAL_PRICE")
     extreme_no_min_yes_price: float = Field(0.40, alias="EXTREME_NO_MIN_YES_PRICE")
     extreme_no_ideal_yes_price: float = Field(0.50, alias="EXTREME_NO_IDEAL_YES_PRICE")
+    # Position sizing for ~$1 average per trade
     extreme_min_position: float = Field(0.50, alias="EXTREME_MIN_POSITION")
     extreme_max_position: float = Field(1.00, alias="EXTREME_MAX_POSITION")
-    extreme_aggressive_max: float = Field(5.00, alias="EXTREME_AGGRESSIVE_MAX")
+    extreme_aggressive_max: float = Field(1.50, alias="EXTREME_AGGRESSIVE_MAX")
 
     # Risk Management
     bankroll_usdc: float = Field(1000.0, alias="BANKROLL_USDC")

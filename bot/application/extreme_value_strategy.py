@@ -40,10 +40,10 @@ class ExtremeValueStrategy:
         self.no_min_yes_price = getattr(config, "extreme_no_min_yes_price", 0.40)
         self.no_ideal_yes_price = getattr(config, "extreme_no_ideal_yes_price", 0.50)
 
-        # Position sizing
+        # Position sizing (target ~$1 average per trade)
         self.min_position = getattr(config, "extreme_min_position", 0.50)  # $0.50
         self.max_position = getattr(config, "extreme_max_position", 1.00)  # $1.00
-        self.aggressive_max = getattr(config, "extreme_aggressive_max", 5.00)  # $5 for great opportunities
+        self.aggressive_max = getattr(config, "extreme_aggressive_max", 1.50)  # $1.50 for great opportunities
 
     def scan_for_opportunities(self, markets: List[WeatherMarket]) -> List[TradeSignal]:
         """Scan markets for extreme value opportunities.
