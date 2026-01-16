@@ -375,16 +375,24 @@ class BotRunner:
             url = f"{self.client.api_base}/markets/{ticker}"
             response = self.client._make_request("GET", url)
 
-            if response and 'market' in response:
-                market = response['market']
+            # Check if request was successful
+            if response.status_code != 200:
+                self.logger.debug(f"Failed to get market {ticker}: status {response.status_code}")
+                return None
+
+            # Parse JSON response
+            data = response.json()
+
+            if data and 'market' in data:
+                market = data['market']
                 status = market.get('status', '')
                 result = market.get('result', '')
 
                 # DEBUG: Log what we're seeing
                 self.logger.debug(f"Market {ticker}: status={status}, result={result}")
 
-                # Kalshi uses 'finalized' for settled markets
-                is_resolved = status in ['finalized', 'settled', 'closed']
+                # Kalshi uses 'settled' for resolved markets (per API docs)
+                is_resolved = status == 'settled'
 
                 if is_resolved:
                     self.logger.info(f"Found resolved market: {ticker} - status={status}, result={result}")
