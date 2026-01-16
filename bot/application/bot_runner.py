@@ -97,14 +97,16 @@ class BotRunner:
         # Main loop
         last_scan = datetime.min.replace(tzinfo=timezone.utc)
         last_resolution = datetime.min.replace(tzinfo=timezone.utc)
+        last_reset_date = datetime.now(timezone.utc).date()  # Track last reset date
 
         while self.running:
             try:
                 now = datetime.now(timezone.utc)
 
-                # Reset daily counters at midnight UTC
-                if now.date() > last_scan.date():
+                # Reset daily counters at midnight UTC (once per day)
+                if now.date() > last_reset_date:
                     self._reset_daily_counters()
+                    last_reset_date = now.date()
 
                 # Check if it's time to scan for trades
                 if (now - last_scan).total_seconds() >= self.scan_interval:
