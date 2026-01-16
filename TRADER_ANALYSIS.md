@@ -1,5 +1,7 @@
 # 🔍 Multi-Trader Analysis: Proof the Strategy Works
 
+> **Note:** This analysis examines successful **Polymarket** traders to prove the extreme value strategy works. While this data is from Polymarket, the same strategy now runs automatically on **Kalshi** via the bot's `bot-start` command. Consider this historical proof that the strategy is profitable and reproducible.
+
 ## Executive Summary
 
 We've identified **at least 4 successful weather traders** on Polymarket, all independently profiting from the same basic strategy. This is not one lucky person - this is a **reproducible, proven system**.

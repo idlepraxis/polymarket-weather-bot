@@ -2,6 +2,8 @@
 
 ## The Strategy That Actually Works
 
+> **Note:** This strategy was originally analyzed on Polymarket but works identically on **Kalshi** (the bot's current primary platform). The same principles, entry thresholds, and risk management apply. All examples use Polymarket data as historical proof, but the automated bot now runs this strategy on Kalshi via `bot-start`.
+
 This document explains the **Extreme Value Betting** strategy that has generated **$25,700+ in profits** for successful Polymarket weather traders.
 
 ### Real Performance Data
@@ -333,7 +335,7 @@ EXTREME_NO_IDEAL_YES_PRICE=0.50   # Ideal YES price for NO
 # Position Sizing
 EXTREME_MIN_POSITION=0.50         # Min position size
 EXTREME_MAX_POSITION=1.00         # Standard max position
-EXTREME_AGGRESSIVE_MAX=5.00       # Max for great opportunities
+EXTREME_AGGRESSIVE_MAX=1.50       # Max for great opportunities
 ```
 
 ---

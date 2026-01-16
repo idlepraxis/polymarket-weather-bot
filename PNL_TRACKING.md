@@ -135,7 +135,7 @@ trade = Trade(
     side=TradeSide.BUY,
     price=signal.price,
     size=signal.size,
-    cost=signal.size * signal.price,
+    cost=signal.size,  # FIXED: Cost equals size (position size in USD)
     simulation=dry_run,  # True for --dry-run, False for live
     ...
 )
@@ -167,7 +167,7 @@ db.update_resolution(
 )
 ```
 
-**Future Enhancement**: Automatic resolution tracking via Polymarket/Kalshi APIs.
+**Status as of Jan 16, 2026**: ✅ Automatic resolution tracking is now IMPLEMENTED. The bot checks resolutions hourly via Kalshi API and automatically updates P&L for resolved trades.
 
 ## Example Output
 

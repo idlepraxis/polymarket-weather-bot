@@ -47,7 +47,7 @@ EXTREME_YES_MAX_PRICE=0.15    # Buy YES only if < 15¢
 EXTREME_NO_MIN_YES_PRICE=0.40 # Buy NO only if YES > 40¢
 EXTREME_MIN_POSITION=0.50     # Minimum bet size
 EXTREME_MAX_POSITION=1.00     # Standard bet size
-EXTREME_AGGRESSIVE_MAX=5.00   # Max bet for great opportunities
+EXTREME_AGGRESSIVE_MAX=1.50   # Max bet for great opportunities
 
 # Optional (for logging)
 LOG_LEVEL=INFO
