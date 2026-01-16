@@ -380,12 +380,21 @@ class BotRunner:
                 status = market.get('status', '')
                 result = market.get('result', '')
 
+                # DEBUG: Log what we're seeing
+                self.logger.debug(f"Market {ticker}: status={status}, result={result}")
+
+                # Kalshi uses 'finalized' for settled markets
+                is_resolved = status in ['finalized', 'settled', 'closed']
+
+                if is_resolved:
+                    self.logger.info(f"Found resolved market: {ticker} - status={status}, result={result}")
+
                 return {
-                    'resolved': status == 'settled',
+                    'resolved': is_resolved,
                     'outcome': result  # 'yes' or 'no'
                 }
-        except:
-            pass
+        except Exception as e:
+            self.logger.error(f"Error getting Kalshi market status for {ticker}: {e}")
 
         return None
 
