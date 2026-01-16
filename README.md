@@ -528,6 +528,27 @@ python scripts/fix_trade_costs.py
 - Review recent trades for quality: `python bot.py trades --simulation --limit 20`
 - Consider adjusting entry thresholds in `.env`
 
+### Trades not resolving (stay pending)
+
+**Symptom:** All trades show "pending" P&L, win rate stays 0%
+
+**Possible causes:**
+1. **Markets haven't closed yet** - Weather markets close after the forecast date
+2. **Markets closed but not settled** - Kalshi settles 6-12 hours after close
+3. **Resolution checker not running** - Check bot logs for "Checking for market resolutions"
+
+**Check bot logs:**
+```bash
+tmux attach -t bot
+# Look for: "Checking 20 open trades..."
+# Should see this every hour
+```
+
+**If fixed in latest version:**
+- Update to latest: `git pull origin claude/polymarket-weather-bot-y4DAm`
+- Restart bot to get fixes
+- Resolution checking was fixed on January 16, 2026
+
 ---
 
 ## 📝 Development Status

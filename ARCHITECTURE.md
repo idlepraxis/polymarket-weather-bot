@@ -229,6 +229,29 @@ EXTREME_NO_MIN_YES_PRICE=0.40    # Buy NO if YES > 40¢
 **Symptom:** Bot stops when terminal closes
 **Fix:** Use tmux - detach with `Ctrl+B` then `D`
 
+### Issue 6: Daily Counter Reset Every Minute (January 16, 2026)
+**Symptom:** Logs show "Resetting daily counters" every minute
+**Cause:** Date comparison against datetime.min (year 0001)
+**Fix:** Track last_reset_date separately
+**File:** bot_runner.py:99-107
+**Commit:** 7cd09cf
+
+### Issue 7: Resolution Checker - AttributeError (January 16, 2026)
+**Symptom:** `'KalshiClient' object has no attribute 'base_url'`
+**Cause:** Used wrong attribute name (base_url vs api_base)
+**Fix:** Changed to self.client.api_base
+**File:** bot_runner.py:375
+**Commit:** f5fcdc5
+**Impact:** CRITICAL - Resolution checking was 100% broken
+
+### Issue 8: Resolution Checker - JSON Parsing (January 16, 2026)
+**Symptom:** `argument of type 'Response' is not iterable`
+**Cause:** Didn't parse httpx.Response object to dict
+**Fix:** Call response.json() before accessing data
+**File:** bot_runner.py:371-407
+**Commit:** 86e08b7
+**Impact:** CRITICAL - Resolution checking was 100% broken
+
 ---
 
 ## Database Schema
@@ -266,6 +289,6 @@ CREATE TABLE trades (
 
 ---
 
-**Version:** 2.1.0
-**Last Updated:** January 15, 2026
-**Status:** Production - Running on VPS
+**Version:** 2.1.1
+**Last Updated:** January 16, 2026
+**Status:** Production - Running on VPS (Resolution checking fixed)

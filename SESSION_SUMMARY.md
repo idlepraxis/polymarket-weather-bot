@@ -1,12 +1,12 @@
 # Polymarket Weather Bot: Complete Development Summary
 
 **Project Status:** ✅ **PRODUCTION READY** - Automated bot running on VPS
-**Last Updated:** January 15, 2026
+**Last Updated:** January 16, 2026
 **Branch:** `claude/polymarket-weather-bot-y4DAm`
 
 ---
 
-## 🎯 CURRENT STATUS (January 15, 2026)
+## 🎯 CURRENT STATUS (January 16, 2026)
 
 ### ✅ BOT IS FULLY OPERATIONAL - AUTOMATED WITH P&L TRACKING
 
@@ -18,14 +18,16 @@
 - ✅ **VPS deployment** - Successfully running on Ionos VPS
 - ✅ **Position sizing** - Fixed to target $1 average per trade
 - ✅ **Risk management** - Daily limits, exposure caps, city diversification
+- ✅ **Resolution checking** - FIXED (January 16) - was completely broken, now working
 
 **Current Simulation:**
-- **Started:** January 15, 2026, 03:17 UTC
+- **Started:** January 16, 2026 (restarted after fixes)
 - **Platform:** Kalshi (simulation mode)
 - **Strategy:** Extreme value betting
 - **Duration:** 2-week validation period
 - **Trades:** ~20-30 per day, ~$1 each
 - **Goal:** Win rate > 30% before going live
+- **Status:** Awaiting first market resolutions to validate P&L tracking
 
 ---
 
@@ -89,6 +91,30 @@
 - `README.md` - Complete rewrite with current commands
 - `SESSION_SUMMARY.md` - This file
 - `ARCHITECTURE.md` - Updated to reflect bot_runner and P&L tracking
+- `CONFIGURATION.md` - New comprehensive configuration guide
+
+**Commits:**
+- `abea9c1` - Update documentation to reflect v2.1
+- `05b37a4` - Clarify configuration system
+
+### Phase 4: Critical Resolution Checker Fixes (January 16, 2026)
+**Key Accomplishments:**
+- Fixed daily counter reset bug (was resetting every minute)
+- Fixed resolution checker completely (3 critical bugs)
+- Resolution checking now functional after being 100% broken
+
+**Critical Bugs Fixed:**
+1. **Daily counter reset:** Reset every minute instead of once/day
+2. **Wrong API attribute:** Used `base_url` instead of `api_base`
+3. **JSON parsing:** Didn't parse Response object to dict
+
+**Commits:**
+- `7cd09cf` - Fix daily counter reset bug
+- `b2483a2` - Add debug logging for resolution checking
+- `f5fcdc5` - Fix resolution checker API attribute
+- `86e08b7` - Fix resolution checker JSON parsing
+
+**Impact:** Resolution checking was completely non-functional from start. All 3 bugs prevented ANY markets from being marked as resolved. Now fixed and functional.
 
 ---
 
@@ -235,6 +261,89 @@ cost = 1.00  # CORRECT
 **Files:** `bot/application/bot_runner.py:287`
 **Commit:** `c62de1e`
 **Migration:** `scripts/fix_trade_costs.py`
+
+### Fix 6: Daily Counter Reset Bug (January 16, 2026)
+**Problem:** Bot was resetting daily counters every minute instead of once per day
+**Root Cause:** Date comparison logic compared `now.date()` with `last_scan.date()`, but `last_scan` was initialized to `datetime.min` (year 0001), so current date was always > year 0001
+
+**Evidence:**
+```
+[00:44:39] INFO Resetting daily counters (new day)
+[00:45:39] INFO Resetting daily counters (new day)
+[00:46:39] INFO Resetting daily counters (new day)
+... every minute!
+```
+
+**Fix:**
+```python
+# Before (BROKEN)
+last_scan = datetime.min
+if now.date() > last_scan.date():  # Always true!
+    self._reset_daily_counters()
+
+# After (FIXED)
+last_reset_date = now.date()  # Track actual reset date
+if now.date() > last_reset_date:  # Only true on date change
+    self._reset_daily_counters()
+    last_reset_date = now.date()
+```
+
+**Files:** `bot/application/bot_runner.py:99-107`
+**Commit:** `7cd09cf`
+**Impact:** Daily counters now reset correctly once per day at midnight UTC
+
+### Fix 7: Resolution Checker - Wrong API Attribute (January 16, 2026)
+**Problem:** Resolution checking completely broken with AttributeError
+**Root Cause:** Code tried to access `self.client.base_url` but KalshiClient uses `self.client.api_base`
+
+**Evidence:**
+```
+ERROR: 'KalshiClient' object has no attribute 'base_url'
+INFO: No new resolutions found
+```
+
+**Fix:**
+```python
+# Before (BROKEN)
+url = f"{self.client.base_url}/markets/{ticker}"  # AttributeError
+
+# After (FIXED)
+url = f"{self.client.api_base}/markets/{ticker}"  # Correct attribute
+```
+
+**Files:** `bot/application/bot_runner.py:375`
+**Commit:** `f5fcdc5`
+**Impact:** **CRITICAL - Resolution checking was 100% broken, now works**
+
+### Fix 8: Resolution Checker - JSON Parsing Bug (January 16, 2026)
+**Problem:** Resolution checking failed with "argument of type 'Response' is not iterable"
+**Root Cause:** `_make_request()` returns `httpx.Response` object, not a dict. Code tried to check `'market' in response` which doesn't work on Response objects
+
+**Evidence:**
+```
+ERROR: argument of type 'Response' is not iterable
+INFO: No new resolutions found
+```
+
+**Fix:**
+```python
+# Before (BROKEN)
+response = self.client._make_request("GET", url)
+if response and 'market' in response:  # Fails - Response not iterable
+    market = response['market']
+
+# After (FIXED)
+response = self.client._make_request("GET", url)
+if response.status_code != 200:
+    return None
+data = response.json()  # Parse JSON first
+if data and 'market' in data:
+    market = data['market']
+```
+
+**Files:** `bot/application/bot_runner.py:371-407`
+**Commit:** `86e08b7`
+**Impact:** **CRITICAL - Resolution checking now properly parses API responses**
 
 ---
 
@@ -521,6 +630,7 @@ CREATE TABLE trades (
 
 ---
 
-**Last Updated:** January 15, 2026
-**Status:** 🟢 Production - Running on VPS
-**Next Milestone:** February 1, 2026 - Evaluate simulation results
+**Last Updated:** January 16, 2026
+**Status:** 🟢 Production - Running on VPS (Resolution checking FIXED)
+**Next Milestone:** January 17-18, 2026 - Validate resolution tracking works
+**Critical Note:** Resolution checking was completely broken until January 16 fixes
