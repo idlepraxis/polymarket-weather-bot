@@ -372,7 +372,7 @@ class BotRunner:
         """Get market status from Kalshi API."""
         try:
             # Use Kalshi API to get market details
-            url = f"{self.client.base_url}/markets/{ticker}"
+            url = f"{self.client.api_base}/markets/{ticker}"
             response = self.client._make_request("GET", url)
 
             if response and 'market' in response:
