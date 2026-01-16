@@ -943,5 +943,261 @@ def bot_status(
         raise typer.Exit(1)
 
 
+@app.command()
+def analyze_wallet(
+    wallet_address: str = typer.Argument(..., help="Ethereum wallet address (0x...)"),
+    limit: int = typer.Option(1000, help="Maximum number of trades to fetch"),
+    show_trades: bool = typer.Option(False, help="Show individual trades"),
+):
+    """
+    Analyze a Polymarket wallet to reverse engineer their trading strategy.
+
+    This analyzes entry thresholds, position sizing, market selection, and
+    trading frequency to understand how successful traders operate.
+    """
+    try:
+        from bot.analysis import WalletAnalyzer
+
+        console.print(f"[cyan]Analyzing wallet:[/cyan] {wallet_address}\n")
+
+        with console.status("[bold green]Fetching trades from Polymarket..."):
+            analyzer = WalletAnalyzer()
+            profile = analyzer.analyze_wallet(wallet_address, limit)
+
+        if profile.total_trades == 0:
+            console.print("[yellow]No trades found for this wallet.[/yellow]")
+            console.print("\n[dim]Possible reasons:")
+            console.print("  - Wallet has no trading activity on Polymarket")
+            console.print("  - Wallet address is incorrect")
+            console.print("  - API rate limits or connectivity issues[/dim]")
+            return
+
+        # ====== STRATEGY OVERVIEW ======
+        overview_table = Table(title="🎯 Strategy Overview", box=box.ROUNDED)
+        overview_table.add_column("Metric", style="cyan")
+        overview_table.add_column("Value", style="white")
+
+        overview_table.add_row("Total Trades", f"{profile.total_trades:,}")
+        overview_table.add_row("Total Volume", f"${profile.total_volume:,.2f}")
+
+        if profile.total_pnl != 0:
+            pnl_color = "green" if profile.total_pnl > 0 else "red"
+            overview_table.add_row("Total P&L", f"[{pnl_color}]${profile.total_pnl:,.2f}[/{pnl_color}]")
+            overview_table.add_row("Profit per Trade", f"[{pnl_color}]${profile.avg_profit_per_trade:.2f}[/{pnl_color}]")
+
+        if profile.win_rate > 0:
+            overview_table.add_row("Win Rate", f"{profile.win_rate:.1%}")
+
+        overview_table.add_row("Trading Period", f"{profile.trading_days} days")
+        overview_table.add_row("Trades per Day", f"{profile.trades_per_day:.1f}")
+
+        console.print(overview_table)
+        console.print()
+
+        # ====== ENTRY THRESHOLDS ======
+        if profile.yes_entry_prices or profile.no_entry_prices:
+            threshold_table = Table(title="📊 Entry Thresholds (Extreme Value Strategy)", box=box.ROUNDED)
+            threshold_table.add_column("Metric", style="cyan")
+            threshold_table.add_column("YES Buys", style="green")
+            threshold_table.add_column("NO Buys", style="red")
+
+            yes_count = len(profile.yes_entry_prices)
+            no_count = len(profile.no_entry_prices)
+
+            threshold_table.add_row("Trade Count", str(yes_count), str(no_count))
+
+            if yes_count > 0:
+                threshold_table.add_row(
+                    "Average Entry",
+                    f"{profile.avg_yes_entry:.1%}",
+                    f"{profile.avg_no_entry:.1%}" if no_count > 0 else "-"
+                )
+                threshold_table.add_row(
+                    "Median Entry",
+                    f"{profile.median_yes_entry:.1%}",
+                    f"{profile.median_no_entry:.1%}" if no_count > 0 else "-"
+                )
+                threshold_table.add_row(
+                    "10th Percentile",
+                    f"{profile.yes_10th_percentile:.1%}",
+                    "-"
+                )
+                threshold_table.add_row(
+                    "90th Percentile",
+                    f"{profile.yes_90th_percentile:.1%}",
+                    "-"
+                )
+
+            console.print(threshold_table)
+            console.print()
+
+        # ====== POSITION SIZING ======
+        sizing_table = Table(title="💰 Position Sizing", box=box.ROUNDED)
+        sizing_table.add_column("Metric", style="cyan")
+        sizing_table.add_column("Value", style="white")
+
+        sizing_table.add_row("Average Size", f"${profile.avg_position_size:.2f}")
+        sizing_table.add_row("Median Size", f"${profile.median_position_size:.2f}")
+        sizing_table.add_row("Min Size", f"${profile.min_position_size:.2f}")
+        sizing_table.add_row("Max Size", f"${profile.max_position_size:.2f}")
+        sizing_table.add_row("Std Deviation", f"${profile.position_size_stddev:.2f}")
+        sizing_table.add_row("Max Single Position %", f"{profile.max_single_position_pct:.1f}%")
+
+        console.print(sizing_table)
+        console.print()
+
+        # ====== MARKET SELECTION ======
+        if profile.market_categories:
+            market_table = Table(title="🎲 Market Selection", box=box.ROUNDED)
+            market_table.add_column("Category", style="cyan")
+            market_table.add_column("Trades", justify="right", style="white")
+            market_table.add_column("Percentage", justify="right", style="yellow")
+
+            for category, count in sorted(profile.market_categories.items(), key=lambda x: x[1], reverse=True):
+                pct = count / profile.total_trades * 100
+                market_table.add_row(
+                    category.title(),
+                    f"{count:,}",
+                    f"{pct:.1f}%"
+                )
+
+            console.print(market_table)
+            console.print()
+
+            # Weather focus highlight
+            if profile.weather_percentage > 0:
+                weather_pct = profile.weather_percentage * 100
+                if weather_pct >= 80:
+                    focus = "🌟 HEAVY"
+                    color = "green"
+                elif weather_pct >= 50:
+                    focus = "🎯 MODERATE"
+                    color = "yellow"
+                else:
+                    focus = "💡 LIGHT"
+                    color = "white"
+
+                console.print(f"[{color}]{focus} Weather Focus: {weather_pct:.1f}% of all trades[/{color}]\n")
+
+        # ====== RISK MANAGEMENT ======
+        risk_table = Table(title="⚠️ Risk Management", box=box.ROUNDED)
+        risk_table.add_column("Metric", style="cyan")
+        risk_table.add_column("Value", style="white")
+
+        risk_table.add_row("Max Daily Exposure", f"${profile.max_daily_exposure:.2f}")
+        risk_table.add_row("Avg Daily Exposure", f"${profile.avg_daily_exposure:.2f}")
+        risk_table.add_row("Max Position as % of Volume", f"{profile.max_single_position_pct:.1f}%")
+
+        console.print(risk_table)
+        console.print()
+
+        # ====== PERFORMANCE BY PRICE RANGE ======
+        if profile.yes_low_performance.get('count', 0) > 0:
+            perf_table = Table(title="📈 Performance by Entry Range", box=box.ROUNDED)
+            perf_table.add_column("Range", style="cyan")
+            perf_table.add_column("Trades", justify="right", style="white")
+            perf_table.add_column("Avg Entry", justify="right", style="yellow")
+            perf_table.add_column("Avg Size", justify="right", style="green")
+            perf_table.add_column("Total Volume", justify="right", style="magenta")
+
+            ranges = [
+                ("YES < 15¢ (Extreme)", profile.yes_low_performance),
+                ("YES 15-40¢ (Mid)", profile.yes_mid_performance),
+                ("NO (YES > 40¢)", profile.no_performance),
+            ]
+
+            for label, perf in ranges:
+                if perf.get('count', 0) > 0:
+                    perf_table.add_row(
+                        label,
+                        f"{perf['count']:,}",
+                        f"{perf['avg_entry']:.1%}",
+                        f"${perf['avg_size']:.2f}",
+                        f"${perf['total_volume']:.2f}"
+                    )
+
+            console.print(perf_table)
+            console.print()
+
+        # ====== STRATEGY RECOMMENDATION ======
+        console.print("[bold cyan]🎯 Reverse Engineered Strategy:[/bold cyan]\n")
+
+        strategy_lines = []
+
+        # Entry thresholds
+        if profile.yes_entry_prices:
+            strategy_lines.append(f"📍 YES Entry: Buy when price ≤ {profile.median_yes_entry:.1%} (median: {profile.median_yes_entry:.1%})")
+            strategy_lines.append(f"   Range: {profile.yes_10th_percentile:.1%} to {profile.yes_90th_percentile:.1%}")
+
+        if profile.no_entry_prices:
+            # Convert NO entry to YES price for clarity
+            yes_price_for_no = 1 - profile.median_no_entry
+            strategy_lines.append(f"📍 NO Entry: Buy when YES price ≥ {yes_price_for_no:.1%}")
+
+        # Position sizing
+        strategy_lines.append(f"\n💰 Position Sizing: ${profile.median_position_size:.2f} median, ${profile.avg_position_size:.2f} average")
+        strategy_lines.append(f"   Range: ${profile.min_position_size:.2f} to ${profile.max_position_size:.2f}")
+
+        # Trading frequency
+        strategy_lines.append(f"\n📊 Frequency: {profile.trades_per_day:.1f} trades/day")
+
+        # Market focus
+        if profile.weather_percentage > 0.5:
+            strategy_lines.append(f"\n🌤️ Focus: {profile.weather_percentage*100:.0f}% weather markets")
+
+        for line in strategy_lines:
+            console.print(line)
+
+        console.print()
+
+        # ====== CONFIG TEMPLATE ======
+        console.print("[bold cyan]⚙️ Suggested .env Configuration:[/bold cyan]\n")
+        console.print("[dim]# Add these to your .env file to replicate this strategy:[/dim]")
+
+        if profile.yes_entry_prices:
+            console.print(f"EXTREME_YES_MAX_PRICE={profile.yes_90th_percentile:.2f}")
+            console.print(f"EXTREME_YES_IDEAL_PRICE={profile.median_yes_entry:.2f}")
+
+        if profile.no_entry_prices:
+            yes_for_no = 1 - profile.median_no_entry
+            console.print(f"EXTREME_NO_MIN_YES_PRICE={yes_for_no:.2f}")
+
+        console.print(f"EXTREME_MIN_POSITION={profile.min_position_size:.2f}")
+        console.print(f"EXTREME_MAX_POSITION={profile.median_position_size:.2f}")
+        console.print(f"EXTREME_AGGRESSIVE_MAX={profile.max_position_size:.2f}")
+
+        console.print()
+
+        # ====== INDIVIDUAL TRADES ======
+        if show_trades and profile.trades:
+            console.print(f"\n[bold cyan]📝 Individual Trades (showing last {min(20, len(profile.trades))}):[/bold cyan]\n")
+
+            trades_table = Table(box=box.SIMPLE)
+            trades_table.add_column("Date", style="dim")
+            trades_table.add_column("Side", style="yellow")
+            trades_table.add_column("Entry", justify="right")
+            trades_table.add_column("Size", justify="right")
+            trades_table.add_column("Type", style="cyan")
+            trades_table.add_column("Question", max_width=40)
+
+            for trade in profile.trades[-20:]:
+                trades_table.add_row(
+                    trade.timestamp.strftime("%m/%d"),
+                    trade.side,
+                    f"{trade.entry_price:.1%}",
+                    f"${trade.position_size:.2f}",
+                    trade.market_type or "unknown",
+                    trade.market_question[:37] + "..." if len(trade.market_question) > 40 else trade.market_question
+                )
+
+            console.print(trades_table)
+
+    except Exception as e:
+        console.print(f"[red]Error analyzing wallet:[/red] {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

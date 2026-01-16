@@ -230,6 +230,13 @@ sudo journalctl -u trading-bot -f
 | `trades [--simulation] [--limit 50]` | Trade history |
 | `stats [--simulation]` | Detailed statistics |
 
+### Analysis & Strategy
+
+| Command | Description |
+|---------|-------------|
+| `analyze-wallet <address>` | Reverse engineer strategy from Polymarket wallet |
+| `analyze-wallet <address> --show-trades` | Show individual trades |
+
 ### Utilities
 
 | Command | Description |
@@ -372,6 +379,158 @@ Based on strategy analysis with $1,000 bankroll:
 - Win rate **> 30%** → GO LIVE with real money
 - Win rate **25-30%** → Adjust parameters, retest
 - Win rate **< 25%** → Strategy not viable, don't go live
+
+---
+
+## 🔍 Wallet Analysis Feature
+
+Reverse engineer successful traders' strategies by analyzing their on-chain Polymarket activity.
+
+### Quick Start
+
+```bash
+# Analyze a wallet to extract strategy
+bot analyze-wallet 0x8278252ebbf354eca8ce316e680a0eaf02859464
+
+# Show individual trades
+bot analyze-wallet 0x8278252ebbf354eca8ce316e680a0eaf02859464 --show-trades
+
+# Limit number of trades fetched
+bot analyze-wallet 0x8278252ebbf354eca8ce316e680a0eaf02859464 --limit 500
+```
+
+### What It Analyzes
+
+The wallet analyzer extracts comprehensive strategy insights:
+
+**📊 Entry Thresholds:**
+- Average YES entry price
+- Median YES/NO entry prices
+- 10th/90th percentile thresholds
+- Price ranges for extreme value strategy
+
+**💰 Position Sizing:**
+- Min, max, median, average position sizes
+- Position size standard deviation
+- Max single position as % of total volume
+
+**🎲 Market Selection:**
+- Category breakdown (weather, sports, politics, etc.)
+- Weather market percentage
+- Trading focus analysis
+
+**📈 Risk Management:**
+- Max daily exposure
+- Average daily exposure
+- Position diversification metrics
+
+**⚡ Trading Frequency:**
+- Trades per day average
+- Trading period duration
+- Activity patterns
+
+**🎯 Performance by Range:**
+- YES < 15¢ performance (extreme low)
+- YES 15-40¢ performance (mid-range)
+- NO buying performance (when YES > 40¢)
+
+### Example Output
+
+```
+🎯 Strategy Overview
+┌──────────────────────┬──────────────┐
+│ Total Trades         │ 1,420        │
+│ Total Volume         │ $25,700.00   │
+│ Profit per Trade     │ $18.10       │
+│ Trading Period       │ 456 days     │
+│ Trades per Day       │ 3.1          │
+└──────────────────────┴──────────────┘
+
+📊 Entry Thresholds (Extreme Value Strategy)
+┌──────────────────┬────────────┬────────────┐
+│ Metric           │ YES Buys   │ NO Buys    │
+├──────────────────┼────────────┼────────────┤
+│ Trade Count      │ 892        │ 528        │
+│ Average Entry    │ 11.2%      │ 38.5%      │
+│ Median Entry     │ 10.5%      │ 37.0%      │
+│ 10th Percentile  │ 5.2%       │ -          │
+│ 90th Percentile  │ 14.8%      │ -          │
+└──────────────────┴────────────┴────────────┘
+
+💰 Position Sizing
+┌───────────────────────┬──────────┐
+│ Average Size          │ $1.85    │
+│ Median Size           │ $1.50    │
+│ Min Size              │ $0.50    │
+│ Max Size              │ $5.00    │
+└───────────────────────┴──────────┘
+
+🎯 Reverse Engineered Strategy:
+
+📍 YES Entry: Buy when price ≤ 10.5%
+   Range: 5.2% to 14.8%
+
+📍 NO Entry: Buy when YES price ≥ 63.0%
+
+💰 Position Sizing: $1.50 median, $1.85 average
+   Range: $0.50 to $5.00
+
+📊 Frequency: 3.1 trades/day
+
+🌤️ Focus: 94% weather markets
+
+⚙️ Suggested .env Configuration:
+
+EXTREME_YES_MAX_PRICE=0.15
+EXTREME_YES_IDEAL_PRICE=0.11
+EXTREME_NO_MIN_YES_PRICE=0.63
+EXTREME_MIN_POSITION=0.50
+EXTREME_MAX_POSITION=1.50
+EXTREME_AGGRESSIVE_MAX=5.00
+```
+
+### Use Cases
+
+**1. Strategy Validation:**
+```bash
+# Analyze Trader B (known successful trader)
+bot analyze-wallet 0x8278252ebbf354eca8ce316e680a0eaf02859464
+
+# Compare their thresholds to yours
+# Adjust your .env settings to match
+```
+
+**2. Discovering New Strategies:**
+```bash
+# Find a high-volume trader on polymarketanalytics.com
+# Analyze their approach
+bot analyze-wallet 0x... --show-trades
+
+# Look for patterns in their market selection
+```
+
+**3. Competitive Analysis:**
+```bash
+# Track multiple successful traders
+for wallet in wallet1 wallet2 wallet3; do
+  bot analyze-wallet $wallet > analysis_$wallet.txt
+done
+
+# Compare strategies across traders
+```
+
+### Data Sources
+
+The analyzer fetches data from:
+1. **Polymarket CLOB API** - Primary source for recent trades
+2. **The Graph Subgraph** - Fallback for historical on-chain data
+
+### Limitations
+
+- Only analyzes Polymarket activity (not Kalshi)
+- Requires wallet to have public trading history
+- P&L data may be incomplete if markets are still resolving
+- Subject to API rate limits (~1000 trades per query)
 
 ---
 
