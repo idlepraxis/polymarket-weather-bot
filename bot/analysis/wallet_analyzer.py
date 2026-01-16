@@ -120,32 +120,57 @@ class WalletAnalyzer:
         """Fetch all trades from a wallet using Polymarket API."""
         trades = []
 
-        try:
-            # Try Polymarket's public API first
-            url = "https://clob.polymarket.com/trades"
-            params = {
-                "maker_address": wallet_address.lower(),
-                "limit": limit
-            }
+        # Try multiple API endpoints
+        endpoints = [
+            {
+                "name": "Gamma API",
+                "url": "https://gamma-api.polymarket.com/events",
+                "method": "events"
+            },
+            {
+                "name": "CLOB API - Trades",
+                "url": "https://clob.polymarket.com/trades",
+                "method": "trades"
+            },
+        ]
 
-            self.logger.debug(f"Fetching trades from Polymarket API: {url}")
-            response = self.http_client.get(url, params=params)
+        for endpoint in endpoints:
+            try:
+                if endpoint["method"] == "events":
+                    # Try fetching events and extracting positions
+                    self.logger.debug(f"Trying {endpoint['name']}: {endpoint['url']}")
+                    # This endpoint might not have direct trade data, skip for now
+                    continue
 
-            if response.status_code == 200:
-                data = response.json()
-                self.logger.info(f"Fetched {len(data)} trades from Polymarket API")
+                elif endpoint["method"] == "trades":
+                    url = endpoint["url"]
+                    params = {
+                        "maker_address": wallet_address.lower(),
+                        "limit": limit
+                    }
 
-                for trade_data in data:
-                    trade = self._parse_trade(trade_data)
-                    if trade:
-                        trades.append(trade)
-            else:
-                self.logger.warning(f"Polymarket API returned status {response.status_code}")
+                    self.logger.debug(f"Fetching from {endpoint['name']}: {url}")
+                    response = self.http_client.get(url, params=params)
 
-        except Exception as e:
-            self.logger.error(f"Error fetching trades from Polymarket API: {e}")
+                    if response.status_code == 200:
+                        data = response.json()
+                        self.logger.info(f"Fetched {len(data)} trades from {endpoint['name']}")
 
-        # If Polymarket API didn't work, try alternative methods
+                        for trade_data in data:
+                            trade = self._parse_trade(trade_data)
+                            if trade:
+                                trades.append(trade)
+
+                        if trades:
+                            return trades
+                    else:
+                        self.logger.warning(f"{endpoint['name']} returned status {response.status_code}")
+
+            except Exception as e:
+                self.logger.debug(f"Error with {endpoint['name']}: {e}")
+                continue
+
+        # If Polymarket APIs didn't work, try The Graph subgraph
         if not trades:
             self.logger.info("Attempting to fetch from Polymarket subgraph...")
             trades = self._fetch_from_subgraph(wallet_address, limit)

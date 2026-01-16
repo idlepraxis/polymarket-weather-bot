@@ -969,7 +969,12 @@ def analyze_wallet(
             console.print("\n[dim]Possible reasons:")
             console.print("  - Wallet has no trading activity on Polymarket")
             console.print("  - Wallet address is incorrect")
-            console.print("  - API rate limits or connectivity issues[/dim]")
+            console.print("  - API rate limits or connectivity issues")
+            console.print("  - Polymarket API requires authentication (recent change)[/dim]")
+            console.print("\n[cyan]Alternative: Use Polymarket Analytics directly:[/cyan]")
+            console.print(f"https://polymarketanalytics.com/traders/{wallet_address}")
+            console.print("\nOr try The Graph explorer:")
+            console.print(f"https://thegraph.com/explorer/subgraphs/BdXdeG7WR6bjdWwe9wfN2bhJ2VpX3RQP1v1LNdMhQAMw")
             return
 
         # ====== STRATEGY OVERVIEW ======
@@ -1193,9 +1198,11 @@ def analyze_wallet(
             console.print(trades_table)
 
     except Exception as e:
-        console.print(f"[red]Error analyzing wallet:[/red] {e}")
+        console.print("[red]Error analyzing wallet:[/red]")
+        console.print(str(e))
         import traceback
-        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        console.print("[dim]Full traceback:[/dim]")
+        console.print(traceback.format_exc())
         raise typer.Exit(1)
 
 
