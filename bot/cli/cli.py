@@ -1202,7 +1202,7 @@ def analyze_wallet(
         console.print(str(e))
         import traceback
         console.print("[dim]Full traceback:[/dim]")
-        console.print(traceback.format_exc())
+        console.print(traceback.format_exc(), markup=False)
         raise typer.Exit(1)
 
 
