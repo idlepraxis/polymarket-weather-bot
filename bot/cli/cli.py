@@ -970,7 +970,7 @@ def analyze_wallet(
             console.print("  - Wallet has no trading activity on Polymarket")
             console.print("  - Wallet address is incorrect")
             console.print("  - API rate limits or connectivity issues")
-            console.print("  - Polymarket API requires authentication (recent change)[/dim]")
+            console.print("  - Polymarket API requires authentication (recent change)")
             console.print("\n[cyan]Alternative: Use Polymarket Analytics directly:[/cyan]")
             console.print(f"https://polymarketanalytics.com/traders/{wallet_address}")
             console.print("\nOr try The Graph explorer:")
