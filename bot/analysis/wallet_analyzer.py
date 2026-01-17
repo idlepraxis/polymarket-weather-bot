@@ -145,7 +145,7 @@ class WalletAnalyzer:
                 elif endpoint["method"] == "trades":
                     url = endpoint["url"]
                     params = {
-                        "maker_address": wallet_address.lower(),
+                        "user": wallet_address.lower(),
                         "limit": limit
                     }
 
