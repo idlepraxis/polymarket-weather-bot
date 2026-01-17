@@ -123,26 +123,20 @@ class WalletAnalyzer:
         # Try multiple API endpoints
         endpoints = [
             {
-                "name": "Gamma API",
-                "url": "https://gamma-api.polymarket.com/events",
-                "method": "events"
+                "name": "Data API - Activity",
+                "url": "https://data-api.polymarket.com/activity",
+                "method": "activity"
             },
             {
-                "name": "CLOB API - Trades",
-                "url": "https://clob.polymarket.com/trades",
+                "name": "Data API - Trades",
+                "url": "https://data-api.polymarket.com/trades",
                 "method": "trades"
             },
         ]
 
         for endpoint in endpoints:
             try:
-                if endpoint["method"] == "events":
-                    # Try fetching events and extracting positions
-                    self.logger.debug(f"Trying {endpoint['name']}: {endpoint['url']}")
-                    # This endpoint might not have direct trade data, skip for now
-                    continue
-
-                elif endpoint["method"] == "trades":
+                if endpoint["method"] == "activity" or endpoint["method"] == "trades":
                     url = endpoint["url"]
                     params = {
                         "user": wallet_address.lower(),
