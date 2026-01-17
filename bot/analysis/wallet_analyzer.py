@@ -234,21 +234,34 @@ class WalletAnalyzer:
             if side not in ["YES", "NO"]:
                 side = "BUY"  # Default
 
-            # Parse timestamp
-            timestamp_str = trade_data.get("timestamp", "")
+            # Parse timestamp - Data API returns Unix timestamp (integer seconds)
+            timestamp_value = trade_data.get("timestamp", 0)
             try:
-                timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                # Try parsing as Unix timestamp first (Data API format)
+                if isinstance(timestamp_value, (int, float)):
+                    timestamp = datetime.fromtimestamp(timestamp_value)
+                # Fall back to ISO string format
+                elif isinstance(timestamp_value, str):
+                    timestamp = datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
+                else:
+                    timestamp = datetime.now()
             except:
                 timestamp = datetime.now()
 
+            # Data API uses different field names than CLOB API
+            market_id = trade_data.get("conditionId") or trade_data.get("market", "")
+            market_question = trade_data.get("title") or trade_data.get("market_question", "Unknown")
+            # Use usdcSize for dollar amount, fall back to size
+            position_size = float(trade_data.get("usdcSize") or trade_data.get("size", 0))
+
             return TradeAnalysis(
-                market_id=trade_data.get("market", ""),
-                market_question=trade_data.get("market_question", "Unknown"),
+                market_id=market_id,
+                market_question=market_question,
                 side=side,
                 entry_price=float(trade_data.get("price", 0)),
-                position_size=float(trade_data.get("size", 0)),
+                position_size=position_size,
                 timestamp=timestamp,
-                market_type=self._classify_market(trade_data.get("market_question", "")),
+                market_type=self._classify_market(market_question),
             )
 
         except Exception as e:
