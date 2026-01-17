@@ -138,31 +138,48 @@ class WalletAnalyzer:
             try:
                 if endpoint["method"] == "activity" or endpoint["method"] == "trades":
                     url = endpoint["url"]
-                    params = {
-                        "user": wallet_address.lower(),
-                        "limit": limit
-                    }
+                    offset = 0
+                    batch_size = min(500, limit)  # API max is 500 per request
 
-                    self.logger.debug(f"Fetching from {endpoint['name']}: {url}")
-                    response = self.http_client.get(url, params=params)
+                    # Paginate through all results
+                    while len(trades) < limit:
+                        params = {
+                            "user": wallet_address.lower(),
+                            "limit": batch_size,
+                            "offset": offset
+                        }
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        self.logger.info(f"Fetched {len(data)} trades from {endpoint['name']}")
+                        self.logger.debug(f"Fetching from {endpoint['name']}: {url} (offset={offset})")
+                        response = self.http_client.get(url, params=params)
 
-                        for trade_data in data:
-                            trade = self._parse_trade(trade_data)
-                            if trade:
-                                trades.append(trade)
+                        if response.status_code == 200:
+                            data = response.json()
+                            if not data:  # No more trades
+                                break
 
-                        if trades:
-                            return trades
-                    else:
-                        self.logger.warning(f"{endpoint['name']} returned status {response.status_code}")
+                            self.logger.info(f"Fetched {len(data)} trades from {endpoint['name']} (total so far: {len(trades) + len(data)})")
+
+                            for trade_data in data:
+                                trade = self._parse_trade(trade_data)
+                                if trade:
+                                    trades.append(trade)
+
+                            # If we got fewer results than requested, we've reached the end
+                            if len(data) < batch_size:
+                                break
+
+                            offset += len(data)
+                        else:
+                            self.logger.warning(f"{endpoint['name']} returned status {response.status_code}")
+                            break
 
             except Exception as e:
                 self.logger.debug(f"Error with {endpoint['name']}: {e}")
                 continue
+
+        # If we successfully fetched trades, return them
+        if trades:
+            return trades
 
         # If Polymarket APIs didn't work, try The Graph subgraph
         if not trades:
