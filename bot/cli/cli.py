@@ -1199,7 +1199,7 @@ def analyze_wallet(
 
     except Exception as e:
         console.print("[red]Error analyzing wallet:[/red]")
-        console.print(str(e))
+        console.print(str(e), markup=False)
         import traceback
         console.print("[dim]Full traceback:[/dim]")
         console.print(traceback.format_exc(), markup=False)
