@@ -946,7 +946,7 @@ def bot_status(
 @app.command()
 def analyze_wallet(
     wallet_address: str = typer.Argument(..., help="Ethereum wallet address (0x...)"),
-    limit: int = typer.Option(1000, help="Maximum number of trades to fetch"),
+    limit: int = typer.Option(10000, help="Maximum number of trades to fetch"),
     show_trades: bool = typer.Option(False, help="Show individual trades"),
 ):
     """
