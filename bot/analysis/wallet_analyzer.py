@@ -149,6 +149,10 @@ class WalletAnalyzer:
                             "offset": offset
                         }
 
+                        # For activity endpoint, filter for TRADE type only
+                        if endpoint["method"] == "activity":
+                            params["type"] = "TRADE"
+
                         self.logger.debug(f"Fetching from {endpoint['name']}: {url} (offset={offset})")
                         response = self.http_client.get(url, params=params)
 
