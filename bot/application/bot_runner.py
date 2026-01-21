@@ -391,8 +391,8 @@ class BotRunner:
                 # DEBUG: Log what we're seeing
                 self.logger.debug(f"Market {ticker}: status={status}, result={result}")
 
-                # Kalshi uses 'settled' for resolved markets (per API docs)
-                is_resolved = status == 'settled'
+                # Kalshi uses 'finalized' for resolved markets
+                is_resolved = status == 'finalized'
 
                 if is_resolved:
                     self.logger.info(f"Found resolved market: {ticker} - status={status}, result={result}")
