@@ -1206,5 +1206,103 @@ def analyze_wallet(
         raise typer.Exit(1)
 
 
+@app.command(name="test-resolution")
+def test_resolution(
+    ticker: str = typer.Option(None, help="Specific ticker to test (optional)"),
+    outcome: str = typer.Option("yes", help="Mock outcome: yes or no"),
+):
+    """Test the resolution checker with mock data.
+
+    This command simulates a finalized market to test if the resolution
+    checker logic is working correctly without waiting for real markets.
+    """
+    try:
+        console.print("\n[bold yellow]🧪 Testing Resolution Checker[/bold yellow]\n")
+
+        # Get database and bot runner
+        config = get_config()
+        trade_db = TradeHistoryDB()
+
+        # Get open trades
+        open_trades = trade_db.get_open_trades(simulation=True, platform="kalshi")
+
+        if not open_trades:
+            console.print("[yellow]No open trades found to test with.[/yellow]")
+            console.print("\nTip: Run the bot to place some trades first:")
+            console.print("  python bot.py bot-start --simulation")
+            return
+
+        # Select a trade to test
+        test_trade = None
+        if ticker:
+            # Find specific ticker
+            test_trade = next((t for t in open_trades if t['market_id'] == ticker), None)
+            if not test_trade:
+                console.print(f"[red]No open trade found for ticker: {ticker}[/red]")
+                return
+        else:
+            # Use first trade
+            test_trade = open_trades[0]
+
+        console.print(f"[cyan]Testing with trade:[/cyan]")
+        console.print(f"  Trade ID: {test_trade['trade_id']}")
+        console.print(f"  Market: {test_trade['market_id']}")
+        console.print(f"  Question: {test_trade['question']}")
+        console.print(f"  Token: {test_trade['token_id']}")
+        console.print(f"  Size: ${test_trade['cost']:.2f}")
+        console.print()
+
+        # Mock the market resolution
+        console.print(f"[yellow]Simulating market finalization with outcome: {outcome}[/yellow]")
+
+        # Create mock market info
+        mock_market_info = {
+            'resolved': True,
+            'outcome': outcome
+        }
+
+        # Calculate outcome
+        if 'yes' in test_trade['token_id'].lower():
+            won = outcome == 'yes'
+        else:
+            won = outcome == 'no'
+
+        # Calculate P&L
+        if won:
+            shares = test_trade['size'] / test_trade['price'] if test_trade['price'] > 0 else test_trade['size']
+            payout = shares
+            pnl = round(payout - test_trade['cost'], 2)
+        else:
+            pnl = -round(test_trade['cost'], 2)
+
+        console.print(f"\n[cyan]Resolution Result:[/cyan]")
+        console.print(f"  Market Outcome: {outcome.upper()}")
+        console.print(f"  Your Position: {test_trade['token_id']}")
+        console.print(f"  Result: {'🎉 WON' if won else '❌ LOST'}")
+        console.print(f"  P&L: ${pnl:+.2f}")
+        console.print()
+
+        # Ask to update database
+        confirm = typer.confirm("Update this trade in the database?")
+        if confirm:
+            trade_db.update_resolution(
+                trade_id=test_trade['trade_id'],
+                won=won,
+                pnl=pnl,
+                resolution_date=datetime.now(timezone.utc)
+            )
+            console.print("[green]✓ Trade updated successfully![/green]")
+            console.print("\nCheck your P&L:")
+            console.print("  python bot.py status")
+        else:
+            console.print("[yellow]Test completed without updating database.[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}", markup=False)
+        import traceback
+        console.print(traceback.format_exc(), markup=False)
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
