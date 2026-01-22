@@ -56,51 +56,88 @@ def get_trader() -> WeatherTrader:
 
 
 @app.command()
-def status():
+def status(
+    platform: str = typer.Option("kalshi", help="Platform: polymarket or kalshi"),
+    simulation: bool = typer.Option(True, help="Show simulation or live trades"),
+):
     """Show bot status and portfolio summary."""
     try:
-        trader = get_trader()
-        portfolio = trader.get_portfolio()
+        # Get data directly from database without initializing connectors
+        trade_db = TradeHistoryDB()
+
+        # Get P&L summary
+        pnl = trade_db.get_pnl_summary(simulation=simulation, platform=platform)
+
+        # Get open trades count
+        open_trades = trade_db.get_open_trades(simulation=simulation, platform=platform)
+
+        # Get recent trades
+        recent_trades = trade_db.get_trades(simulation=simulation, platform=platform, limit=10)
 
         # Create status panel
         status_table = Table(show_header=False, box=box.SIMPLE)
         status_table.add_column("Metric", style="cyan")
         status_table.add_column("Value", style="green")
 
-        mode = "SIMULATION" if trader.config.simulation_mode else "LIVE"
-        mode_color = "yellow" if trader.config.simulation_mode else "red"
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "red"
 
         status_table.add_row("Trading Mode", f"[{mode_color}]{mode}[/{mode_color}]")
-        status_table.add_row("Cash Balance", f"${portfolio.cash_balance:.2f}")
-        status_table.add_row("Total Trades", str(portfolio.total_trades))
-        status_table.add_row("Win Rate", f"{portfolio.win_rate:.1%}")
-        status_table.add_row("Total P&L", f"${portfolio.total_pnl:.2f}")
-        status_table.add_row("Open Positions", str(portfolio.open_positions))
+        status_table.add_row("Platform", platform.upper())
+        status_table.add_row("Total Trades", str(pnl['total_trades']))
+        status_table.add_row("Open Positions", str(len(open_trades)))
+        status_table.add_row("Resolved Trades", str(pnl['winning_trades'] + pnl['losing_trades']))
+        status_table.add_row("Win Rate", f"{pnl['win_rate']:.1f}%")
+        status_table.add_row("Total P&L", f"${pnl['realized_pnl']:.2f}")
+        status_table.add_row("Total Invested", f"${pnl['total_invested']:.2f}")
+        status_table.add_row("ROI", f"{pnl['roi']:.1f}%")
 
         console.print(Panel(status_table, title="Portfolio Status", border_style="blue"))
 
         # Recent trades
-        if trader.trades:
+        if recent_trades:
             trades_table = Table(title="Recent Trades", box=box.ROUNDED)
-            trades_table.add_column("Time", style="dim")
+            trades_table.add_column("Date", style="dim")
             trades_table.add_column("Side", style="cyan")
-            trades_table.add_column("Market", style="white")
-            trades_table.add_column("Size", style="yellow")
-            trades_table.add_column("Edge", style="green")
+            trades_table.add_column("Market", style="white", max_width=40)
+            trades_table.add_column("Price", justify="right")
+            trades_table.add_column("Size", justify="right", style="yellow")
+            trades_table.add_column("Status", style="green")
 
-            for trade in trader.trades[-5:]:  # Last 5 trades
+            for trade in recent_trades[:10]:  # Last 10 trades
+                # Parse timestamp
+                try:
+                    trade_time = datetime.fromisoformat(trade['timestamp'])
+                    time_str = trade_time.strftime("%m/%d %H:%M")
+                except:
+                    time_str = "Unknown"
+
+                # Determine status
+                if trade['resolved']:
+                    status = "🎉 WON" if trade['won'] else "❌ LOST"
+                    status += f" (${trade['pnl']:+.2f})"
+                else:
+                    status = "⏳ Pending"
+
+                market_str = trade['question'][:37] + "..." if len(trade['question']) > 40 else trade['question']
+
                 trades_table.add_row(
-                    trade.timestamp.strftime("%m/%d %H:%M"),
-                    trade.side,
-                    trade.question[:40] + "...",
-                    f"${trade.size:.2f}",
-                    f"{trade.edge:.1%}",
+                    time_str,
+                    trade['side'].upper(),
+                    market_str,
+                    f"{trade['price']:.2f}",
+                    f"${trade['cost']:.2f}",
+                    status
                 )
 
             console.print(trades_table)
+        else:
+            console.print("\n[yellow]No trades found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
+        console.print(f"[red]Error:[/red] {str(e)}", markup=False)
+        import traceback
+        console.print(traceback.format_exc(), markup=False)
         raise typer.Exit(1)
 
 
