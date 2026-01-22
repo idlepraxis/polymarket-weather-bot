@@ -49,7 +49,7 @@ class PolymarketClient:
 
         # WebSocket for real-time events (optional, for monitoring)
         try:
-            self.web3_ws = Web3(Web3.WebsocketProvider(self.config.chainstack_ws_url))
+            self.web3_ws = Web3(Web3.WebSocketProvider(self.config.chainstack_ws_url))
             try:
                 if callable(geth_poa_middleware):
                     self.web3_ws.middleware_onion.inject(geth_poa_middleware, layer=0)
