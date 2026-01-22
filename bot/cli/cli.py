@@ -83,8 +83,8 @@ def status(
         # Get open trades count
         open_trades = trade_db.get_open_trades(simulation=simulation, platform=platform)
 
-        # Get recent trades
-        recent_trades = trade_db.get_trades(simulation=simulation, platform=platform, limit=10)
+        # Get recent trades (fetch up to 100, show all)
+        recent_trades = trade_db.get_trades(simulation=simulation, platform=platform, limit=100)
 
         # Create status panel
         status_table = Table(show_header=False, box=box.SIMPLE)
@@ -116,7 +116,7 @@ def status(
             trades_table.add_column("Size", justify="right", style="yellow")
             trades_table.add_column("Status", style="green")
 
-            for trade in recent_trades[:10]:  # Last 10 trades
+            for trade in recent_trades:  # Show all trades (up to 100)
                 # Parse timestamp
                 try:
                     trade_time = datetime.fromisoformat(trade['timestamp'])
