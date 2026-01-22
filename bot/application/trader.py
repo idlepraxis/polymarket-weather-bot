@@ -4,9 +4,8 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.weather import WeatherConnector
 from bot.utils.config import Config
 from bot.utils.logger import get_logger
@@ -19,11 +18,17 @@ from bot.utils.models import (
     WeatherMarket,
 )
 
+# Optional Polymarket support
+try:
+    from bot.connectors.polymarket import PolymarketClient
+except ImportError:
+    PolymarketClient = None
+
 
 class WeatherTrader:
     """Core trading logic for weather prediction markets."""
 
-    def __init__(self, config: Config, polymarket: PolymarketClient, weather: WeatherConnector):
+    def __init__(self, config: Config, polymarket: Any, weather: WeatherConnector):  # polymarket can be PolymarketClient or KalshiClient
         self.config = config
         self.polymarket = polymarket
         self.weather = weather

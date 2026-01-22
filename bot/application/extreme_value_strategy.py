@@ -11,13 +11,18 @@ This exploits market microstructure inefficiencies in low-liquidity weather mark
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.weather import WeatherConnector
 from bot.utils.config import Config
 from bot.utils.logger import get_logger
 from bot.utils.models import TradeSignal, TradeSide, WeatherMarket
+
+# Optional Polymarket support
+try:
+    from bot.connectors.polymarket import PolymarketClient
+except ImportError:
+    PolymarketClient = None
 
 
 class ExtremeValueStrategy:
@@ -26,7 +31,7 @@ class ExtremeValueStrategy:
     def __init__(
         self,
         config: Config,
-        polymarket: PolymarketClient,
+        polymarket: Any,  # Can be PolymarketClient or KalshiClient
         weather: Optional[WeatherConnector] = None,
     ):
         self.config = config
