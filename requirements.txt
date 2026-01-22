@@ -1,13 +1,13 @@
-# Blockchain & Web3
-web3==6.11.1
-eth-account>=0.13.0
-eth-keys>=0.5.0
-eth-utils>=2.3.1
-pycryptodome==3.19.0
+# Blockchain & Web3 (only needed for Polymarket - not required for Kalshi)
+# web3==6.11.1
+# eth-account>=0.13.0
+# eth-keys>=0.5.0
+# eth-utils>=2.3.1
+# pycryptodome==3.19.0
 
-# Polymarket SDKs
-py-clob-client==0.34.4
-py-order-utils==0.3.2
+# Polymarket SDKs (not needed for Kalshi)
+# py-clob-client==0.34.4
+# py-order-utils==0.3.2
 
 # Kalshi API (RSA signing)
 cryptography>=41.0.0
@@ -26,9 +26,8 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
 
-# Telegram Bot (optional - not needed for Kalshi)
-# python-telegram-bot==20.7  # Conflicts with httpx>=0.27.0 needed by py-clob-client
-python-telegram-bot>=21.0  # Updated version compatible with newer httpx
+# Telegram Bot (optional - commented out to avoid dependency conflicts)
+# python-telegram-bot>=21.0
 
 # Utilities
 tenacity==8.2.3

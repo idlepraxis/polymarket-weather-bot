@@ -9,12 +9,19 @@ from pathlib import Path
 
 from bot.application.extreme_value_strategy import ExtremeValueStrategy
 from bot.connectors.kalshi import KalshiClient
-from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.weather import WeatherConnector
 from bot.database.trade_history import TradeHistoryDB
 from bot.utils.config import get_config
 from bot.utils.logger import get_logger
 from bot.utils.models import Trade, TradeSide
+
+# Optional Polymarket support (requires web3, eth-account, py-clob-client)
+try:
+    from bot.connectors.polymarket import PolymarketClient
+    POLYMARKET_AVAILABLE = True
+except ImportError:
+    POLYMARKET_AVAILABLE = False
+    PolymarketClient = None
 
 
 class BotRunner:
@@ -41,6 +48,11 @@ class BotRunner:
         if self.platform == "kalshi":
             self.client = KalshiClient(self.config)
         else:
+            if not POLYMARKET_AVAILABLE:
+                raise ImportError(
+                    "Polymarket support not available. Install required packages:\n"
+                    "pip install web3>=6.11.1 eth-account>=0.13.0 py-clob-client>=0.34.4"
+                )
             self.client = PolymarketClient(self.config)
 
         self.strategy = ExtremeValueStrategy(self.config, self.client, self.weather)

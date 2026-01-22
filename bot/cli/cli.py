@@ -14,13 +14,20 @@ from rich import box
 from bot.application.trader import WeatherTrader
 from bot.application.extreme_value_strategy import ExtremeValueStrategy
 from bot.application.bot_runner import BotRunner
-from bot.connectors.polymarket import PolymarketClient
 from bot.connectors.kalshi import KalshiClient
 from bot.connectors.weather import WeatherConnector
 from bot.database.trade_history import TradeHistoryDB
 from bot.utils.config import Config, get_config
 from bot.utils.logger import setup_logger, get_logger
 from bot.utils.models import Trade, TradeSide
+
+# Optional Polymarket support
+try:
+    from bot.connectors.polymarket import PolymarketClient
+    POLYMARKET_AVAILABLE = True
+except ImportError:
+    POLYMARKET_AVAILABLE = False
+    PolymarketClient = None
 
 app = typer.Typer(
     name="polymarket-weather-bot",
@@ -48,6 +55,11 @@ def get_trader() -> WeatherTrader:
     logger = setup_logger(level=config.log_level, log_dir=config.log_dir)
 
     # Initialize components
+    if not POLYMARKET_AVAILABLE:
+        console.print("[red]Error: Polymarket support not available[/red]")
+        console.print("Install required packages: pip install web3 eth-account py-clob-client")
+        raise typer.Exit(1)
+
     polymarket = PolymarketClient(config)
     weather = WeatherConnector(config)
     trader = WeatherTrader(config, polymarket, weather)
