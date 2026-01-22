@@ -1,7 +1,7 @@
 # Documentation Index
 
 **Purpose:** Master index of all documentation - Claude's "external brain"
-**Last Updated:** January 21, 2026
+**Last Updated:** January 22, 2026
 
 ---
 
@@ -21,6 +21,7 @@
 | `README.md` | Main documentation, getting started | First time setup, quick reference |
 | `CONFIGURATION.md` | All config options explained | Setting up .env, tuning parameters |
 | `SIMULATION_GUIDE.md` | How to run 2-week validation | Before going live with real money |
+| `TESTING_RESOLUTION_CHECKER.md` | Instant resolution testing (10s vs 24h) | Testing resolution logic without waiting overnight |
 | `WALLET_ANALYSIS_GUIDE.md` | How to analyze trader strategies | Researching successful traders |
 
 ### 🔧 Implementation Specifications
@@ -140,13 +141,15 @@ Every implementation guide should have:
 4. This file - Find anything else
 
 **For Future Me (Next Session):**
-1. Read `SESSION_SUMMARY.md` Phase 6 (latest)
-2. Check current bot status
-3. Look for new implementation guides here
-4. Proceed with next task
+1. Read `SESSION_SUMMARY.md` Phase 7 (latest)
+2. Check current bot status with: `python bot.py status`
+3. Test resolution logic if needed: `python bot.py test-resolution`
+4. Look for new implementation guides here
+5. Proceed with next task
 
 ---
 
-**Document Count:** 11 markdown files
-**Implementation Guides:** 1 ready, 0 in progress
-**Last Major Update:** Phase 6 - Resolution checker fix (Jan 21, 2026)
+**Document Count:** 12 markdown files
+**Implementation Guides:** 1 ready (WEATHER_EDGE_IMPLEMENTATION.md), 0 in progress
+**Testing Guides:** 1 (TESTING_RESOLUTION_CHECKER.md)
+**Last Major Update:** Phase 7 - Testing infrastructure & Kalshi-only optimization (Jan 22, 2026)
