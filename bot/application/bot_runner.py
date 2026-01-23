@@ -59,7 +59,7 @@ class BotRunner:
 
         # Bot configuration
         self.scan_interval = getattr(self.config, 'scan_interval_hours', 6) * 3600  # seconds
-        self.resolution_check_interval = getattr(self.config, 'resolution_check_hours', 1) * 3600
+        self.resolution_check_interval = getattr(self.config, 'resolution_check_hours', 0.25) * 3600  # Check every 15 min
         self.max_trades_per_scan = getattr(self.config, 'max_trades_per_scan', 20)
         self.max_trades_per_day = getattr(self.config, 'max_trades_per_day', 50)
         self.max_trades_per_city = getattr(self.config, 'max_trades_per_city', 3)
@@ -388,7 +388,11 @@ class BotRunner:
             response = self.client._make_request("GET", url)
 
             # Check if request was successful
-            if response.status_code != 200:
+            if response.status_code == 404:
+                # Market was deleted (likely expired/finalized and removed from API)
+                self.logger.warning(f"Market {ticker} not found (404) - likely expired and removed from API")
+                return None
+            elif response.status_code != 200:
                 self.logger.debug(f"Failed to get market {ticker}: status {response.status_code}")
                 return None
 
