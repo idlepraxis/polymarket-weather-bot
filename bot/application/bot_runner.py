@@ -344,33 +344,31 @@ class BotRunner:
 
             resolved_count = 0
 
-            for trade in open_trades:
-                try:
-                    # Query market status from platform
-                    market_id = trade['market_id']
-
-                    if self.platform == "kalshi":
-                        market_info = self._get_kalshi_market_status(market_id)
-                    else:
+            if self.platform == "kalshi":
+                # For Kalshi: Use settlements API (more reliable than individual market queries)
+                resolved_count = self._check_kalshi_settlements(open_trades)
+            else:
+                # For Polymarket: Query individual markets (keeping old logic)
+                for trade in open_trades:
+                    try:
+                        market_id = trade['market_id']
                         market_info = self._get_polymarket_status(market_id)
 
-                    if market_info and market_info.get('resolved'):
-                        # Calculate P&L
-                        won = self._calculate_trade_outcome(trade, market_info)
-                        pnl = self._calculate_pnl(trade, won)
+                        if market_info and market_info.get('resolved'):
+                            won = self._calculate_trade_outcome(trade, market_info)
+                            pnl = self._calculate_pnl(trade, won)
 
-                        # Update database
-                        self.trade_db.update_resolution(
-                            trade_id=trade['trade_id'],
-                            won=won,
-                            pnl=pnl,
-                            resolution_date=datetime.now(timezone.utc)
-                        )
+                            self.trade_db.update_resolution(
+                                trade_id=trade['trade_id'],
+                                won=won,
+                                pnl=pnl,
+                                resolution_date=datetime.now(timezone.utc)
+                            )
 
-                        resolved_count += 1
+                            resolved_count += 1
 
-                except Exception as e:
-                    self.logger.debug(f"Error checking trade {trade['trade_id']}: {e}")
+                    except Exception as e:
+                        self.logger.debug(f"Error checking trade {trade['trade_id']}: {e}")
 
             if resolved_count > 0:
                 self.logger.info(f"Updated {resolved_count} resolved trades")
@@ -379,6 +377,67 @@ class BotRunner:
 
         except Exception as e:
             self.logger.error(f"Error checking resolutions: {e}", exc_info=True)
+
+    def _check_kalshi_settlements(self, open_trades: List[Dict]) -> int:
+        """Check Kalshi settlements and update resolved trades.
+
+        Args:
+            open_trades: List of open trades from database
+
+        Returns:
+            Number of trades resolved
+        """
+        resolved_count = 0
+
+        try:
+            # Get all settlements from Kalshi
+            settlements = self.client.get_settlements(limit=200)
+
+            if not settlements:
+                self.logger.debug("No settlements found")
+                return 0
+
+            # Create a lookup map: ticker -> settlement
+            settlement_map = {s['ticker']: s for s in settlements}
+            self.logger.debug(f"Found settlements for {len(settlement_map)} markets")
+
+            # Check each open trade against settlements
+            for trade in open_trades:
+                ticker = trade['market_id']
+
+                if ticker in settlement_map:
+                    settlement = settlement_map[ticker]
+
+                    # Extract outcome from settlement
+                    market_result = settlement.get('market_result', '').lower()  # 'yes' or 'no'
+
+                    self.logger.info(f"Found settlement for {ticker}: result={market_result}")
+
+                    # Determine if trade won
+                    token_id = trade['token_id']
+                    if 'yes' in token_id.lower():
+                        won = market_result == 'yes'
+                    else:
+                        won = market_result == 'no'
+
+                    # Calculate P&L
+                    pnl = self._calculate_pnl(trade, won)
+
+                    # Update database
+                    self.trade_db.update_resolution(
+                        trade_id=trade['trade_id'],
+                        won=won,
+                        pnl=pnl,
+                        resolution_date=datetime.now(timezone.utc)
+                    )
+
+                    resolved_count += 1
+                    self.logger.info(f"Resolved: {ticker} - {'WON' if won else 'LOST'} (P&L: ${pnl:+.2f})")
+
+        except Exception as e:
+            self.logger.error(f"Error checking Kalshi settlements: {e}", exc_info=True)
+
+        return resolved_count
 
     def _get_kalshi_market_status(self, ticker: str) -> Optional[Dict[str, Any]]:
         """Get market status from Kalshi API."""

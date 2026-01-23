@@ -675,6 +675,36 @@ class KalshiClient:
             self.logger.error(f"Error fetching positions: {e}")
             return []
 
+    def get_settlements(self, limit: int = 200, min_ts: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get settlements (resolved positions) for the account.
+
+        Args:
+            limit: Number of results per page (max 200)
+            min_ts: Filter settlements after this Unix timestamp
+
+        Returns:
+            List of settlement dictionaries with ticker, market_result, revenue, etc.
+        """
+        try:
+            params = {"limit": min(limit, 200)}
+            if min_ts:
+                params["min_ts"] = min_ts
+
+            response = self._make_request("GET", "/portfolio/settlements", params=params)
+
+            if response.status_code != 200:
+                self.logger.error(f"Error fetching settlements: {response.status_code} - {response.text[:200]}")
+                return []
+
+            data = response.json()
+            settlements = data.get("settlements", [])
+            self.logger.info(f"Retrieved {len(settlements)} settlements from Kalshi")
+            return settlements
+
+        except Exception as e:
+            self.logger.error(f"Error fetching settlements: {e}")
+            return []
+
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
         try:
