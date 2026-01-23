@@ -1,7 +1,7 @@
 # Documentation Index
 
 **Purpose:** Master index of all documentation - Claude's "external brain"
-**Last Updated:** January 22, 2026
+**Last Updated:** January 23, 2026
 
 ---
 
@@ -141,9 +141,9 @@ Every implementation guide should have:
 4. This file - Find anything else
 
 **For Future Me (Next Session):**
-1. Read `SESSION_SUMMARY.md` Phase 7 (latest)
+1. Read `SESSION_SUMMARY.md` Phase 8 (latest)
 2. Check current bot status with: `python bot.py status`
-3. Test resolution logic if needed: `python bot.py test-resolution`
+3. Verify settlements API is working correctly
 4. Look for new implementation guides here
 5. Proceed with next task
 
@@ -152,4 +152,5 @@ Every implementation guide should have:
 **Document Count:** 12 markdown files
 **Implementation Guides:** 1 ready (WEATHER_EDGE_IMPLEMENTATION.md), 0 in progress
 **Testing Guides:** 1 (TESTING_RESOLUTION_CHECKER.md)
-**Last Major Update:** Phase 7 - Testing infrastructure & Kalshi-only optimization (Jan 22, 2026)
+**Debug Scripts:** 1 (debug_resolution_checker.py)
+**Last Major Update:** Phase 8 - Resolution checker rewritten to use settlements API (Jan 23, 2026)
