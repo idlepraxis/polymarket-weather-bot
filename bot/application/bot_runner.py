@@ -4,7 +4,7 @@ import time
 import signal
 import sys
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 from bot.application.extreme_value_strategy import ExtremeValueStrategy
