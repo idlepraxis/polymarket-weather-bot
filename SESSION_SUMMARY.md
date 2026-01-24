@@ -1,9 +1,9 @@
 # Polymarket Weather Bot: Complete Development Summary
 
 **Project Status:** ✅ **PRODUCTION READY** - Automated bot running on VPS with validated strategy
-**Last Updated:** January 23, 2026
-**Branch:** `claude/polymarket-weather-bot-8mzhP`
-**Latest Update:** **CRITICAL FIX** - Resolution checker rewritten to use settlements API instead of unreliable markets API
+**Last Updated:** January 24, 2026
+**Branch:** `claude/test-hello-feature-8mzhP`
+**Latest Update:** **CRITICAL FIX** - Dual-mode resolution checker (simulation uses markets API, live uses settlements API)
 
 ---
 
@@ -15,7 +15,7 @@
 - ✅ **Automated bot daemon** (bot_runner.py) - 24/7 operation on VPS
 - ✅ **Kalshi-only mode** - Optimized for single-platform trading
 - ✅ **P&L tracking** - SQLite database with automatic resolution checking
-- ✅ **Resolution checking** - **FIXED (Jan 23)** - Now uses settlements API instead of unreliable markets API
+- ✅ **Resolution checking** - **FIXED (Jan 24)** - Dual-mode: settlements API for live, markets API for simulation
 - ✅ **Testing infrastructure** - Instant resolution testing without 24-hour wait
 - ✅ **Simplified CLI** - 4 core commands (bot-start, bot-status, status, test-resolution)
 - ✅ **VPS deployment** - Clean virtual environment setup with resolved dependencies
@@ -397,6 +397,125 @@ if ticker in settlement_map:
 - Updated status command to show all trades instead of limiting to 10
 
 **Status:** Resolution checker completely rewritten to use correct API. Ready for validation with next market settlement cycle.
+
+### Phase 9: Simulation Mode Resolution Checker Fix (January 24, 2026)
+**Key Accomplishment:**
+- **CRITICAL FIX:** Implemented dual-mode resolution checking for simulation vs live trading
+- Settlements API only works for live trades, not simulation mode
+- Created separate resolution checker for simulation mode using markets API
+
+**The Problem:**
+User discovered 80 simulation trades placed but **0 resolved**, even after implementing settlements API fix in Phase 8.
+
+**Investigation:**
+1. Created `debug_settlements_api.py` to diagnose the issue
+2. Ran debug script and found: `Total settlements: 0` and `SIMULATION: 80 trades`
+3. **Root Cause:** Settlements API only returns REAL positions from live trading
+4. Simulation mode doesn't place actual orders on Kalshi, so settlements API has nothing to return
+
+**User's Requirement:**
+Quote: "I want to be able to check real trades made but only for live mode. For simulation mode we should only imitate them."
+
+**The Solution:**
+Implemented dual-mode resolution checking:
+- **Live Mode:** Use settlements API (real positions) - Phase 8 implementation
+- **Simulation Mode:** Query markets by series with `status=finalized` filter (new)
+
+**User provided proof that markets API works:**
+```bash
+curl "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXLOWTLAX&status=settled&limit=10"
+```
+This returns finalized markets with `"status":"finalized"` and `"result":"yes"/"no"` data.
+
+**Implementation:**
+
+1. **Added method to kalshi.py:**
+```python
+def get_finalized_markets_by_series(
+    self,
+    series_list: List[str],
+    limit: int = 200
+) -> List[Dict[str, Any]]:
+    """Fetch finalized markets for given series tickers.
+
+    Used for simulation mode resolution checking where we don't have
+    real positions but need to check if markets have resolved.
+    """
+    all_finalized = []
+    for series in series_list:
+        params = {
+            "limit": limit,
+            "status": "finalized",
+            "series_ticker": series,
+        }
+        response = self._make_request("GET", "/markets", params=params)
+        # Process and return finalized markets
+```
+
+2. **Updated bot_runner.py resolution checker to branch on mode:**
+```python
+if self.platform == "kalshi":
+    if self.simulation:
+        # Simulation: Query finalized markets (no real positions exist)
+        resolved_count = self._check_kalshi_markets_simulation(open_trades)
+    else:
+        # Live: Use settlements API (real positions exist)
+        resolved_count = self._check_kalshi_settlements(open_trades)
+```
+
+3. **Created simulation mode resolution checker:**
+```python
+def _check_kalshi_markets_simulation(self, open_trades: List[Dict]) -> int:
+    """Check finalized Kalshi markets for simulation mode trades.
+
+    Since simulation mode doesn't create real positions, we can't use
+    settlements API. Instead, query markets by series with status=finalized.
+    """
+    # Extract series tickers from trades (e.g., KXLOWTLAX from KXLOWTLAX-24DEC31)
+    series_set = {ticker.split('-')[0] for ticker in trade_tickers if '-' in ticker}
+
+    # Fetch finalized markets for these series
+    finalized_markets = self.client.get_finalized_markets_by_series(series_list)
+
+    # Match finalized markets to trades and update resolutions
+    # (Same logic as settlements checker but uses market data instead)
+```
+
+**Files Created:**
+- `test_simulation_resolution.py` - Test script to verify simulation mode resolution checking
+
+**Files Modified:**
+- `bot/connectors/kalshi.py` - Added `get_finalized_markets_by_series()` method
+- `bot/application/bot_runner.py` - Added `_check_kalshi_markets_simulation()` method
+- `bot/application/bot_runner.py` - Updated `_check_resolutions()` to branch on simulation mode
+
+**How It Works:**
+
+**Simulation Mode Flow:**
+1. Get open simulation trades from database
+2. Extract unique series tickers (KXLOWTLAX, KXHIGHTSEA, etc.)
+3. Query `/markets?series_ticker={series}&status=finalized` for each series
+4. Match returned finalized markets to open trades by ticker
+5. Update resolutions based on market `result` field ('yes' or 'no')
+
+**Live Mode Flow:**
+1. Query `/portfolio/settlements` (Phase 8 implementation)
+2. Match settlements to trades by ticker
+3. Update resolutions based on settlement data
+
+**Testing:**
+Created `test_simulation_resolution.py` to verify the fix:
+```bash
+python test_simulation_resolution.py
+```
+This script:
+- Fetches open simulation trades
+- Extracts series tickers
+- Queries finalized markets from Kalshi API
+- Shows matches between finalized markets and open trades
+- Simulates resolution checking logic
+
+**Status:** Dual-mode resolution checking implemented. Simulation mode now properly checks market resolutions without requiring real positions. Ready for testing.
 
 ---
 

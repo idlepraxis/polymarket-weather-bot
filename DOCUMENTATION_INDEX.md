@@ -141,9 +141,9 @@ Every implementation guide should have:
 4. This file - Find anything else
 
 **For Future Me (Next Session):**
-1. Read `SESSION_SUMMARY.md` Phase 8 (latest)
+1. Read `SESSION_SUMMARY.md` Phase 9 (latest)
 2. Check current bot status with: `python bot.py status`
-3. Verify settlements API is working correctly
+3. Test simulation mode resolution with: `python test_simulation_resolution.py`
 4. Look for new implementation guides here
 5. Proceed with next task
 
@@ -152,5 +152,6 @@ Every implementation guide should have:
 **Document Count:** 12 markdown files
 **Implementation Guides:** 1 ready (WEATHER_EDGE_IMPLEMENTATION.md), 0 in progress
 **Testing Guides:** 1 (TESTING_RESOLUTION_CHECKER.md)
-**Debug Scripts:** 1 (debug_resolution_checker.py)
-**Last Major Update:** Phase 8 - Resolution checker rewritten to use settlements API (Jan 23, 2026)
+**Debug Scripts:** 2 (debug_resolution_checker.py, debug_settlements_api.py)
+**Test Scripts:** 1 (test_simulation_resolution.py)
+**Last Major Update:** Phase 9 - Dual-mode resolution checker for simulation vs live (Jan 24, 2026)

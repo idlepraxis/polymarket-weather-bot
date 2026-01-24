@@ -705,6 +705,56 @@ class KalshiClient:
             self.logger.error(f"Error fetching settlements: {e}")
             return []
 
+    def get_finalized_markets_by_series(
+        self,
+        series_list: List[str],
+        limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """Fetch finalized markets for given series tickers.
+
+        This is used for simulation mode resolution checking, where we don't have
+        real positions but need to check if markets have resolved.
+
+        Args:
+            series_list: List of series tickers (e.g., ["KXLOWTLAX", "KXHIGHTSEA"])
+            limit: Max markets per series (default 200)
+
+        Returns:
+            List of finalized market dictionaries with ticker, result, status, etc.
+        """
+        all_finalized = []
+
+        for series in series_list:
+            try:
+                params = {
+                    "limit": limit,
+                    "status": "finalized",
+                    "series_ticker": series,
+                }
+
+                response = self._make_request("GET", "/markets", params=params)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    markets = data.get("markets", [])
+                    all_finalized.extend(markets)
+                    if markets:
+                        self.logger.info(f"Found {len(markets)} finalized markets for series {series}")
+                elif response.status_code == 404:
+                    # Series doesn't exist or has no finalized markets - this is normal
+                    self.logger.debug(f"No finalized markets for series {series}")
+                else:
+                    self.logger.warning(f"Error fetching finalized markets for {series}: {response.status_code}")
+
+                time.sleep(0.1)  # Rate limiting
+
+            except Exception as e:
+                self.logger.error(f"Error fetching finalized markets for {series}: {e}")
+                continue
+
+        self.logger.info(f"Retrieved {len(all_finalized)} finalized markets total")
+        return all_finalized
+
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
         try:

@@ -345,8 +345,13 @@ class BotRunner:
             resolved_count = 0
 
             if self.platform == "kalshi":
-                # For Kalshi: Use settlements API (more reliable than individual market queries)
-                resolved_count = self._check_kalshi_settlements(open_trades)
+                # For Kalshi: Branch on simulation vs live mode
+                if self.simulation:
+                    # Simulation: Query finalized markets (no real positions exist)
+                    resolved_count = self._check_kalshi_markets_simulation(open_trades)
+                else:
+                    # Live: Use settlements API (real positions exist)
+                    resolved_count = self._check_kalshi_settlements(open_trades)
             else:
                 # For Polymarket: Query individual markets (keeping old logic)
                 for trade in open_trades:
@@ -436,6 +441,90 @@ class BotRunner:
 
         except Exception as e:
             self.logger.error(f"Error checking Kalshi settlements: {e}", exc_info=True)
+
+        return resolved_count
+
+    def _check_kalshi_markets_simulation(self, open_trades: List[Dict]) -> int:
+        """Check finalized Kalshi markets for simulation mode trades.
+
+        Since simulation mode doesn't create real positions on Kalshi,
+        we can't use the settlements API. Instead, we query markets by
+        series with status=finalized to find resolved markets.
+
+        Args:
+            open_trades: List of open trades from database
+
+        Returns:
+            Number of trades resolved
+        """
+        resolved_count = 0
+
+        try:
+            # Extract unique series tickers from open trades
+            # Market tickers look like: KXLOWTLAX-24DEC31
+            # Series ticker is the part before the hyphen: KXLOWTLAX
+            series_set = set()
+            for trade in open_trades:
+                ticker = trade['market_id']
+                # Extract series ticker (everything before the hyphen)
+                if '-' in ticker:
+                    series = ticker.split('-')[0]
+                    series_set.add(series)
+
+            if not series_set:
+                self.logger.debug("No series tickers found in open trades")
+                return 0
+
+            series_list = list(series_set)
+            self.logger.info(f"Checking finalized markets for {len(series_list)} series: {series_list[:5]}...")
+
+            # Fetch all finalized markets for these series
+            finalized_markets = self.client.get_finalized_markets_by_series(series_list)
+
+            if not finalized_markets:
+                self.logger.debug("No finalized markets found")
+                return 0
+
+            # Create a lookup map: ticker -> market
+            finalized_map = {m['ticker']: m for m in finalized_markets}
+            self.logger.debug(f"Found finalized markets for {len(finalized_map)} tickers")
+
+            # Check each open trade against finalized markets
+            for trade in open_trades:
+                ticker = trade['market_id']
+
+                if ticker in finalized_map:
+                    market = finalized_map[ticker]
+
+                    # Extract outcome from market
+                    market_result = market.get('result', '').lower()  # 'yes' or 'no'
+                    market_status = market.get('status', '')
+
+                    self.logger.info(f"Found finalized market for {ticker}: status={market_status}, result={market_result}")
+
+                    # Determine if trade won
+                    token_id = trade['token_id']
+                    if 'yes' in token_id.lower():
+                        won = market_result == 'yes'
+                    else:
+                        won = market_result == 'no'
+
+                    # Calculate P&L
+                    pnl = self._calculate_pnl(trade, won)
+
+                    # Update database
+                    self.trade_db.update_resolution(
+                        trade_id=trade['trade_id'],
+                        won=won,
+                        pnl=pnl,
+                        resolution_date=datetime.now(timezone.utc)
+                    )
+
+                    resolved_count += 1
+                    self.logger.info(f"Resolved: {ticker} - {'WON' if won else 'LOST'} (P&L: ${pnl:+.2f})")
+
+        except Exception as e:
+            self.logger.error(f"Error checking Kalshi finalized markets: {e}", exc_info=True)
 
         return resolved_count
 
