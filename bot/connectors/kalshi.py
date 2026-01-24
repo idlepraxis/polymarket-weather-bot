@@ -728,7 +728,7 @@ class KalshiClient:
             try:
                 params = {
                     "limit": limit,
-                    "status": "finalized",
+                    "status": "settled",  # Query parameter is 'settled', response will show 'finalized'
                     "series_ticker": series,
                 }
 
