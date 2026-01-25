@@ -332,6 +332,37 @@ class TradeHistoryDB:
             cursor = conn.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_open_market_ids(
+        self,
+        simulation: Optional[bool] = None,
+        platform: Optional[str] = None
+    ) -> set:
+        """Get set of market IDs that have open (unresolved) positions.
+
+        This is used to prevent duplicate trades on the same market.
+
+        Args:
+            simulation: Filter by simulation mode (None = all trades)
+            platform: Filter by platform (None = all platforms)
+
+        Returns:
+            Set of market IDs with open positions
+        """
+        query = "SELECT DISTINCT market_id FROM trades WHERE resolved = 0"
+        params = []
+
+        if simulation is not None:
+            query += " AND simulation = ?"
+            params.append(1 if simulation else 0)
+
+        if platform:
+            query += " AND platform = ?"
+            params.append(platform.lower())
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(query, params)
+            return {row[0] for row in cursor.fetchall()}
+
     def get_stats_by_platform(self, simulation: Optional[bool] = None) -> Dict[str, Dict[str, Any]]:
         """Get P&L statistics grouped by platform.
 

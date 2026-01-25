@@ -209,6 +209,14 @@ class BotRunner:
                 self.logger.info("No opportunities found")
                 return
 
+            # Filter out markets with existing open positions (prevent duplicates)
+            signals = self._filter_existing_positions(signals)
+            self.logger.info(f"After filtering existing positions: {len(signals)} opportunities")
+
+            if not signals:
+                self.logger.info("No new opportunities (all have existing positions)")
+                return
+
             # Apply city diversification
             signals = self._apply_city_limits(signals)
 
@@ -229,6 +237,35 @@ class BotRunner:
 
         except Exception as e:
             self.logger.error(f"Error during scan: {e}", exc_info=True)
+
+    def _filter_existing_positions(self, signals):
+        """Filter out markets that already have open positions.
+
+        This prevents duplicate trades on the same market across multiple scans.
+
+        Args:
+            signals: List of trade signals
+
+        Returns:
+            Filtered list of signals (excluding markets with open positions)
+        """
+        # Get set of market IDs with open positions
+        open_market_ids = self.trade_db.get_open_market_ids(
+            simulation=self.simulation,
+            platform=self.platform
+        )
+
+        if open_market_ids:
+            self.logger.info(f"Filtering {len(open_market_ids)} markets with existing positions")
+
+        # Filter out signals for markets we already have positions in
+        filtered = [s for s in signals if s.market.market_id not in open_market_ids]
+
+        skipped = len(signals) - len(filtered)
+        if skipped > 0:
+            self.logger.info(f"Skipped {skipped} signals (already have positions)")
+
+        return filtered
 
     def _apply_city_limits(self, signals):
         """Limit trades per city to avoid correlation."""
