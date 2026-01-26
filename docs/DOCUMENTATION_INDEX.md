@@ -1,7 +1,20 @@
 # Documentation Index
 
-**Purpose:** Master index of all documentation - Claude's "external brain"
-**Last Updated:** January 24, 2026
+**Purpose:** Master index of all documentation - Quick navigation to all docs
+**Last Updated:** January 26, 2026
+
+---
+
+## 📂 Repository Structure
+
+```
+polymarket-weather-bot/
+├── docs/           # All documentation (you are here)
+├── bot/            # Source code
+├── scripts/        # Utility and diagnostic scripts
+├── tests/          # Unit tests
+└── README.md       # Main entry point
+```
 
 ---
 
@@ -11,14 +24,15 @@
 
 | Document | Purpose | Use When |
 |----------|---------|----------|
-| `ARCHITECTURE.md` | System architecture, data flow | Understanding how components connect |
+| `ARCHITECTURE.md` | System architecture, data flow, common issues | Understanding how components connect, troubleshooting |
 | `EXTREME_VALUE_STRATEGY.md` | Strategy explanation and theory | Understanding WHY the strategy works |
+| `CHANGELOG.md` | Version history and recent improvements | Understanding what changed and why |
 
 ### 📖 User Guides & Tutorials
 
 | Document | Purpose | Use When |
 |----------|---------|----------|
-| `README.md` | Main documentation, getting started | First time setup, quick reference |
+| `../README.md` | Main documentation, getting started | First time setup, quick reference |
 | `CONFIGURATION.md` | All config options explained | Setting up .env, tuning parameters |
 | `SIMULATION_GUIDE.md` | How to run 2-week validation | Before going live with real money |
 | `TESTING_RESOLUTION_CHECKER.md` | Instant resolution testing (10s vs 24h) | Testing resolution logic without waiting overnight |
@@ -28,7 +42,7 @@
 
 | Document | Purpose | Use When |
 |----------|---------|----------|
-| `WEATHER_EDGE_IMPLEMENTATION.md` | **Phase 7: Weather-informed position sizing** | Ready to implement edge-based scaling |
+| `WEATHER_EDGE_IMPLEMENTATION.md` | Weather-informed position sizing specification | Ready to implement edge-based scaling |
 
 **Template for Future Implementation Docs:**
 - Current state analysis
@@ -38,11 +52,10 @@
 - Success metrics
 - Risk considerations
 
-### 📊 Historical Record
+### 📊 Analysis & Research
 
 | Document | Purpose | Use When |
 |----------|---------|----------|
-| `SESSION_SUMMARY.md` | Complete development history by phase | Understanding what was built when and why |
 | `TRADER_ANALYSIS.md` | Research on successful traders | Validating strategy choices |
 
 ---
@@ -66,7 +79,7 @@ Claude: *Checks index* → Found: WEATHER_EDGE_IMPLEMENTATION.md
 ### For Troubleshooting
 
 **Pattern:**
-1. Check `SESSION_SUMMARY.md` for similar past issues
+1. Check `CHANGELOG.md` and `ARCHITECTURE.md` for recent changes and known issues
 2. Check architecture docs for how system works
 3. Check configuration docs for parameter meanings
 
@@ -93,7 +106,7 @@ Claude: *Checks index* → Found: WEATHER_EDGE_IMPLEMENTATION.md
 **Add to existing doc when:**
 - Update to current feature
 - Small bug fix or tweak
-- Session notes (→ SESSION_SUMMARY.md)
+- Version updates (→ CHANGELOG.md)
 
 ### Naming Convention
 
@@ -135,26 +148,25 @@ Every implementation guide should have:
 ## 🚀 Quick Reference
 
 **Most Important Docs:**
-1. `README.md` - Start here
-2. `SESSION_SUMMARY.md` - Complete development history
-3. `CONFIGURATION.md` - How to configure the bot
-4. This file - Find anything else
+1. `../README.md` - Start here (root directory)
+2. `ARCHITECTURE.md` - Technical details and troubleshooting
+3. `CHANGELOG.md` - Recent changes and improvements
+4. `CONFIGURATION.md` - How to configure the bot
+5. This file - Navigation hub
 
-**For Future Me (Next Session):**
-1. Read `SESSION_SUMMARY.md` Phase 9 (latest - dual-mode resolution checker verified working)
-2. Check current bot status with: `python bot.py status`
-3. **Resolution checker status:** ✅ Verified working - tested successfully on Jan 24
-   - Found 1,120 finalized markets from Jan 23 and earlier
-   - User's Jan 24 trades will auto-resolve after markets finalize (tonight/tomorrow)
-4. Test script available: `python test_simulation_resolution.py`
-5. Look for new implementation guides here
-6. Proceed with next task
+**For AI Context:**
+1. Check `CHANGELOG.md` for recent changes (currently v2.2.0)
+2. Check `ARCHITECTURE.md` for system design and common issues
+3. Check current bot status with: `python bot.py bot-status --simulation --platform kalshi`
+4. **Current Status (v2.2.0):**
+   - ✅ Dual-mode resolution checking (simulation uses markets API, live uses settlements API)
+   - ✅ Duplicate trade prevention (filters existing positions)
+   - ✅ Location injection (city names in market questions)
+   - ✅ File logging enabled (logs/bot.log)
 
 ---
 
-**Document Count:** 12 markdown files
-**Implementation Guides:** 1 ready (WEATHER_EDGE_IMPLEMENTATION.md), 0 in progress
-**Testing Guides:** 1 (TESTING_RESOLUTION_CHECKER.md)
-**Debug Scripts:** 2 (debug_resolution_checker.py, debug_settlements_api.py)
-**Test Scripts:** 1 (test_simulation_resolution.py)
-**Last Major Update:** Phase 9 - Dual-mode resolution checker for simulation vs live (Jan 24, 2026)
+**Document Count:** 10 markdown files
+**Scripts:** 11 utility/diagnostic scripts in `../scripts/`
+**Tests:** 5 test files in `../tests/`
+**Last Major Update:** v2.2.0 - Dual-mode resolution, duplicate prevention, location injection (Jan 26, 2026)

@@ -18,7 +18,7 @@ The bot uses a **high-volume, extreme value strategy** based on successful trade
 
 This exploits market mispricings through volume and asymmetric risk/reward ratios, not weather forecasting.
 
-📖 **[Read Full Strategy Guide →](EXTREME_VALUE_STRATEGY.md)**
+📖 **[Read Full Strategy Guide →](docs/EXTREME_VALUE_STRATEGY.md)**
 
 ---
 
@@ -644,11 +644,13 @@ OPENWEATHER_API_KEY=your_key
 
 ## 📚 Additional Documentation
 
-- **[Extreme Value Strategy Guide](EXTREME_VALUE_STRATEGY.md)** - Full strategy explanation
-- **[P&L Tracking Guide](PNL_TRACKING.md)** - Database schema and tracking
-- **[Simulation Guide](SIMULATION_GUIDE.md)** - 2-week validation process
-- **[Architecture Map](ARCHITECTURE.md)** - Complete technical documentation
-- **[Trader Analysis](TRADER_ANALYSIS.md)** - Successful trader patterns
+- **[Extreme Value Strategy Guide](docs/EXTREME_VALUE_STRATEGY.md)** - Full strategy explanation
+- **[Simulation Guide](docs/SIMULATION_GUIDE.md)** - 2-week validation process
+- **[Architecture Map](docs/ARCHITECTURE.md)** - Complete technical documentation
+- **[Configuration Guide](docs/CONFIGURATION.md)** - Detailed configuration options
+- **[Changelog](docs/CHANGELOG.md)** - Version history and recent improvements
+- **[Trader Analysis](docs/TRADER_ANALYSIS.md)** - Successful trader patterns
+- **[Wallet Analysis Guide](docs/WALLET_ANALYSIS_GUIDE.md)** - Analyzing successful traders
 
 ---
 
