@@ -133,9 +133,12 @@ def status(
 
                 market_str = trade['question'][:57] + "..." if len(trade['question']) > 60 else trade['question']
 
+                # Extract YES/NO from token_id
+                token_side = "YES" if "YES" in trade['token_id'].upper() else "NO"
+
                 trades_table.add_row(
                     time_str,
-                    trade['side'].upper(),
+                    token_side,
                     market_str,
                     f"{trade['price']:.2f}",
                     f"${trade['cost']:.2f}",
@@ -970,9 +973,12 @@ def bot_status(
                 else:
                     pnl_str = "[dim]pending[/dim]"
 
+                # Extract YES/NO from token_id
+                token_side = "YES" if "YES" in trade['token_id'].upper() else "NO"
+
                 trades_table.add_row(
                     date_str,
-                    trade['side'],
+                    token_side,
                     f"{trade['price']:.1%}",
                     f"${trade['size']:.2f}",
                     pnl_str,
