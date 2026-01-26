@@ -5,7 +5,7 @@ import sys
 import os
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 try:
     from bot.connectors.kalshi import KalshiClient
@@ -15,7 +15,7 @@ except ImportError as e:
     print(f"❌ Import error: {e}")
     print("\nMake sure you're running this from the project root directory:")
     print("  cd /root/trading-bots/polymarket-weather-bot")
-    print("  python3 check_kalshi_questions.py")
+    print("  python3 scripts/check_kalshi_questions.py")
     sys.exit(1)
 
 def main():

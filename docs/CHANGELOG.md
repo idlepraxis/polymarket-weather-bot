@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Modified `get_logger()` to initialize with file handlers from first call
   - All bot activity now captured in `logs/bot.log`
   - Easier debugging and monitoring
-- **Diagnostic scripts**:
-  - `check_recent_trades.py`: Inspect database for duplicates and trade details
-  - `check_kalshi_questions.py`: Test location injection and API responses
+- **Diagnostic scripts** (in `scripts/` directory):
+  - `scripts/check_recent_trades.py`: Inspect database for duplicates and trade details
+  - `scripts/check_kalshi_questions.py`: Test location injection and API responses
 
 ### Fixed
 - **CRITICAL**: Resolution checker not working for simulation mode (Phase 8-9)
@@ -74,8 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added YES/NO extraction from token_id for Side display
 
 #### Files Added
-- `check_recent_trades.py`: Diagnostic script for trade analysis
-- `check_kalshi_questions.py`: Test script for location injection
+- `scripts/check_recent_trades.py`: Diagnostic script for trade analysis
+- `scripts/check_kalshi_questions.py`: Test script for location injection
 
 ---
 

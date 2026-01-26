@@ -113,7 +113,7 @@ try:
     print()
     print("Next steps:")
     print("1. Check if your Jan 24 markets have finalized on Kalshi website")
-    print("2. Run: python test_simulation_resolution.py")
+    print("2. Run: python scripts/test_simulation_resolution.py")
     print("3. Check bot logs: tail -f logs/bot.log")
     print("4. Manually trigger resolution check if needed")
 
