@@ -61,16 +61,16 @@ def main():
 
     # Now parse them into WeatherMarket objects and show the questions
     print("\n" + "="*80)
-    print("After parsing into WeatherMarket objects:")
+    print("After parsing into WeatherMarket objects (WITH LOCATION INJECTION):")
     print("="*80 + "\n")
 
-    weather_markets = client._parse_weather_markets(raw_markets[:5])
-
-    for market in weather_markets:
-        print(f"Market ID: {market.market_id}")
-        print(f"Question:  {market.question}")
-        print(f"Location:  {market.location}")
-        print(f"{'-'*80}")
+    for market_data in raw_markets[:5]:
+        market = client._parse_weather_market(market_data)
+        if market:
+            print(f"Market ID: {market.market_id}")
+            print(f"Question:  {market.question}")
+            print(f"Location:  {market.location}")
+            print(f"{'-'*80}")
 
 if __name__ == "__main__":
     main()
