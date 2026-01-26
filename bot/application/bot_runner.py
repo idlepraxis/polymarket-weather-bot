@@ -12,7 +12,7 @@ from bot.connectors.kalshi import KalshiClient
 from bot.connectors.weather import WeatherConnector
 from bot.database.trade_history import TradeHistoryDB
 from bot.utils.config import get_config
-from bot.utils.logger import get_logger
+from bot.utils.logger import get_logger, setup_logger
 from bot.utils.models import Trade, TradeSide
 
 # Optional Polymarket support (requires web3, eth-account, py-clob-client)
@@ -35,7 +35,14 @@ class BotRunner:
             simulation: Run in simulation mode (dry-run)
         """
         self.config = get_config()
-        self.logger = get_logger()
+
+        # Set up logger with file output to logs directory
+        self.logger = setup_logger(
+            name="polymarket_weather_bot",
+            level="INFO",
+            log_dir="logs"
+        )
+
         self.platform = platform.lower()
         self.simulation = simulation
         self.running = False
