@@ -111,7 +111,7 @@ def status(
             trades_table = Table(title="Recent Trades", box=box.ROUNDED)
             trades_table.add_column("Date", style="dim")
             trades_table.add_column("Side", style="cyan")
-            trades_table.add_column("Market", style="white", max_width=40)
+            trades_table.add_column("Market", style="white", max_width=60)
             trades_table.add_column("Price", justify="right")
             trades_table.add_column("Size", justify="right", style="yellow")
             trades_table.add_column("Status", style="green")
@@ -131,7 +131,7 @@ def status(
                 else:
                     status = "⏳ Pending"
 
-                market_str = trade['question'][:37] + "..." if len(trade['question']) > 40 else trade['question']
+                market_str = trade['question'][:57] + "..." if len(trade['question']) > 60 else trade['question']
 
                 trades_table.add_row(
                     time_str,
@@ -957,7 +957,7 @@ def bot_status(
             trades_table.add_column("Price", justify="right")
             trades_table.add_column("Size", justify="right")
             trades_table.add_column("P&L", justify="right")
-            trades_table.add_column("Question", max_width=40)
+            trades_table.add_column("Question", max_width=60)
 
             for trade in recent_trades[:5]:
                 timestamp = datetime.fromisoformat(trade['timestamp'])
@@ -976,7 +976,7 @@ def bot_status(
                     f"{trade['price']:.1%}",
                     f"${trade['size']:.2f}",
                     pnl_str,
-                    trade['question'][:37] + "..." if len(trade['question']) > 40 else trade['question']
+                    trade['question'][:57] + "..." if len(trade['question']) > 60 else trade['question']
                 )
 
             console.print(trades_table)
