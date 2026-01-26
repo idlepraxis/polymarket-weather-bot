@@ -523,8 +523,23 @@ class KalshiClient:
             title = market_data.get("title", "")
             subtitle = market_data.get("subtitle", "")
 
-            # Combine title and subtitle for question
-            question = f"{title} - {subtitle}" if subtitle else title
+            # Extract location from ticker first
+            location = self._extract_location_from_ticker(ticker)
+
+            # Combine title and subtitle for question, injecting location
+            # Kalshi questions don't include city, so we inject it
+            if location and title:
+                # Insert location into question: "Will the minimum temperature be" -> "Will the minimum temperature in Seattle be"
+                if "temperature" in title.lower():
+                    # Find where to inject (after "temperature" but before "be")
+                    title_with_location = title.replace("temperature be", f"temperature in {location} be")
+                    question = f"{title_with_location} - {subtitle}" if subtitle else title_with_location
+                else:
+                    # Fallback: just combine as-is
+                    question = f"{title} - {subtitle}" if subtitle else title
+            else:
+                # No location found, use title as-is
+                question = f"{title} - {subtitle}" if subtitle else title
 
             # Get prices (Kalshi uses cents: 0-100)
             yes_bid = market_data.get("yes_bid", 50) / 100.0  # Convert to 0-1
@@ -553,8 +568,8 @@ class KalshiClient:
             if not (is_high_temp or is_low_temp):
                 return None  # Skip non-temperature markets
 
-            # Extract location and threshold
-            location = self._extract_location(question)
+            # Location already extracted from ticker above
+            # Extract temperature threshold from question
             temp_threshold = self._extract_temperature(question)
 
             # Get market metrics
@@ -770,6 +785,38 @@ class KalshiClient:
         except Exception as e:
             self.logger.error(f"Error cancelling order: {e}")
             return False
+
+    def _extract_location_from_ticker(self, ticker: str) -> Optional[str]:
+        """Extract city name from Kalshi series ticker.
+
+        Kalshi tickers follow format: KX[HIGH/LOW]T[CITY_CODE]
+        Examples: KXHIGHTSEA, KXLOWTCHI, KXLOWTNYC
+        """
+        # Map airport/city codes to full city names
+        city_codes = {
+            "SEA": "Seattle",
+            "CHI": "Chicago",
+            "MIA": "Miami",
+            "NYC": "New York",
+            "LAX": "Los Angeles",
+            "SFO": "San Francisco",
+            "DEN": "Denver",
+            "BOS": "Boston",
+            "ATL": "Atlanta",
+            "PHX": "Phoenix",
+            "DCA": "Washington DC",
+            "AUS": "Austin",
+        }
+
+        # Extract city code from ticker (e.g., KXHIGHTSEA -> SEA, KXLOWTCHI -> CHI)
+        ticker_upper = ticker.upper()
+
+        # Try to find which city code matches the end of the ticker
+        for code, city_name in city_codes.items():
+            if code in ticker_upper:
+                return city_name
+
+        return None
 
     def _extract_location(self, question: str) -> Optional[str]:
         """Extract city/location from market question."""
