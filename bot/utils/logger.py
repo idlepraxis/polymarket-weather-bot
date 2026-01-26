@@ -96,8 +96,8 @@ _global_logger: Optional[logging.Logger] = None
 
 
 def get_logger() -> logging.Logger:
-    """Get the global logger instance."""
+    """Get the global logger instance with file logging enabled."""
     global _global_logger
     if _global_logger is None:
-        _global_logger = setup_logger()
+        _global_logger = setup_logger(log_dir="logs")
     return _global_logger
