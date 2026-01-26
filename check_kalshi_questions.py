@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from bot.connectors.kalshi import KalshiClient
     from bot.utils.logger import get_logger
+    from bot.utils.config import Config
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("\nMake sure you're running this from the project root directory:")
@@ -21,11 +22,14 @@ def main():
     logger = get_logger()
 
     try:
-        # Initialize client (will use API key from environment)
-        client = KalshiClient()
+        # Initialize config (will load from .env)
+        config = Config()
+
+        # Initialize client
+        client = KalshiClient(config)
     except Exception as e:
         print(f"❌ Failed to initialize Kalshi client: {e}")
-        print("\nMake sure your .env file has KALSHI_API_KEY and KALSHI_API_SECRET")
+        print("\nMake sure your .env file has KALSHI_API_KEY_ID and KALSHI_API_PRIVATE_KEY")
         sys.exit(1)
 
     print("\n" + "="*80)
