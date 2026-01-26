@@ -7,14 +7,26 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from bot.connectors.kalshi import KalshiClient
-from bot.utils.logger import get_logger
+try:
+    from bot.connectors.kalshi import KalshiClient
+    from bot.utils.logger import get_logger
+except ImportError as e:
+    print(f"❌ Import error: {e}")
+    print("\nMake sure you're running this from the project root directory:")
+    print("  cd /root/trading-bots/polymarket-weather-bot")
+    print("  python3 check_kalshi_questions.py")
+    sys.exit(1)
 
 def main():
     logger = get_logger()
 
-    # Initialize client (will use API key from environment)
-    client = KalshiClient()
+    try:
+        # Initialize client (will use API key from environment)
+        client = KalshiClient()
+    except Exception as e:
+        print(f"❌ Failed to initialize Kalshi client: {e}")
+        print("\nMake sure your .env file has KALSHI_API_KEY and KALSHI_API_SECRET")
+        sys.exit(1)
 
     print("\n" + "="*80)
     print("Fetching weather markets from Kalshi API")

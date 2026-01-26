@@ -2,11 +2,37 @@
 """Check recent trades for duplicates and missing location info."""
 
 import sqlite3
+import os
+import sys
 from datetime import datetime, timedelta
 from collections import Counter
+from pathlib import Path
 
 def main():
-    db_path = "data/trade_history.db"
+    # Try multiple possible database locations
+    possible_paths = [
+        "data/trades.db",
+        "./data/trades.db",
+        os.path.expanduser("~/trading-bots/polymarket-weather-bot/data/trades.db"),
+        "/root/trading-bots/polymarket-weather-bot/data/trades.db",
+        "/home/user/polymarket-weather-bot/data/trades.db",
+    ]
+
+    db_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            db_path = path
+            break
+
+    if not db_path:
+        print("❌ Database not found. Checked locations:")
+        for path in possible_paths:
+            print(f"  - {path}")
+        print("\nThe bot may not have created the database yet.")
+        print("Try running: python bot.py status")
+        sys.exit(1)
+
+    print(f"✓ Found database at: {db_path}\n")
 
     try:
         conn = sqlite3.connect(db_path)
