@@ -122,6 +122,21 @@ This dramatically speeds up development and lets you verify:
 
 Without having to wait for real markets every time.
 
+## Important: Dual-Mode Resolution (January 2026 Update)
+
+The resolution checker now works differently for simulation vs live modes:
+
+**Simulation Mode:**
+- Uses Kalshi markets API with `status=settled` parameter
+- Queries finalized markets by series ticker
+- No real positions exist, so can't use settlements API
+
+**Live Mode:**
+- Uses Kalshi settlements API for real settled positions
+- Calculates actual P&L from executed trades
+
+The `test-resolution` command tests the core logic that's shared between both modes (win/loss determination, P&L calculation, database updates). The only difference in production is which API endpoint is called.
+
 ## Next Steps
 
 After verifying the logic works with test data:
@@ -129,5 +144,6 @@ After verifying the logic works with test data:
 1. Let the bot run overnight with real markets
 2. Check tomorrow morning if actual trades resolved
 3. If they didn't, we know it's an API integration issue (not logic issue)
+4. Check `logs/bot.log` for "Checking for market resolutions" to verify checker is running
 
 This narrows down where bugs might be hiding.

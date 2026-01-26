@@ -2,7 +2,7 @@
 
 **Automated trading bot for prediction market weather trading using extreme value betting strategy.**
 
-> 🤖 **Current Status:** Fully operational with automated bot runner, P&L tracking, and multi-platform support (Kalshi + Polymarket)
+> 🤖 **Current Status:** Fully operational with automated bot runner, P&L tracking, duplicate prevention, dual-mode resolution checking, and multi-platform support (Kalshi + Polymarket)
 
 ---
 
@@ -302,6 +302,18 @@ sudo journalctl -u trading-bot -f
 
 ### 2. Resolution Checking (Every Hour)
 
+The bot uses **dual-mode resolution checking**:
+
+**Simulation Mode:**
+- Queries Kalshi markets API with `status=settled`
+- Checks if markets have finalized
+- No real positions to settle (local-only trades)
+
+**Live Mode:**
+- Uses Kalshi settlements API
+- Checks actual settled positions
+- Calculates real P&L from executed trades
+
 ```
 ┌─────────────┐
 │  Check Open │
@@ -312,7 +324,10 @@ sudo journalctl -u trading-bot -f
        ▼
 ┌─────────────────────┐
 │ Query Kalshi API    │
-│ for Market Status   │
+│ • Simulation: Check │
+│   finalized markets │
+│ • Live: Check       │
+│   settlements       │
 └──────┬──────────────┘
        │
        ▼
@@ -703,25 +718,63 @@ tmux attach -t bot
 # Should see this every hour
 ```
 
-**If fixed in latest version:**
-- Update to latest: `git pull origin claude/polymarket-weather-bot-y4DAm`
-- Restart bot to get fixes
-- Resolution checking was fixed on January 16, 2026
+**Recent fixes (January 2026):**
+- **Dual-mode resolution checker** - Different logic for simulation vs live
+- **Simulation mode** - Now queries markets API instead of settlements API
+- **Logging fixes** - File logging now works properly
+- **Duplicate prevention** - Bot no longer trades same markets multiple times
+
+**To get latest fixes:**
+```bash
+git pull origin main  # or your current branch
+# Restart bot after pulling updates
+```
+
+---
+
+## 🆕 Recent Improvements (January 2026)
+
+### Duplicate Trade Prevention
+The bot now tracks open positions and prevents duplicate trades on the same markets across multiple scans. This ensures each market is only traded once until it resolves.
+
+### Location Injection in Questions
+Market questions now include city names extracted from ticker codes:
+- **Before:** "Will the minimum temperature be 15-16° on Jan 27, 2026?"
+- **After:** "Will the minimum temperature in Denver be 15-16° on Jan 27, 2026?"
+
+### Dual-Mode Resolution Checking
+- **Simulation Mode:** Queries finalized markets via Kalshi markets API
+- **Live Mode:** Uses Kalshi settlements API for real position settlements
+- Ensures proper resolution tracking for both simulation and live trading
+
+### Enhanced Logging
+- Fixed file logging to ensure all bot activity is captured in `logs/bot.log`
+- All modules now properly initialize with file logging enabled
+- Easier debugging and monitoring of bot operations
+
+### UI Improvements
+- Wider Market column (60 chars) to show full temperature ranges
+- YES/NO side display instead of just "BUY"
+- Better status table formatting
 
 ---
 
 ## 📝 Development Status
 
-### ✅ Implemented (v2.1)
+### ✅ Implemented (v2.2 - January 2026)
 - [x] Multi-platform support (Kalshi + Polymarket)
 - [x] Automated bot runner with daemon mode
 - [x] P&L tracking with SQLite database
-- [x] Automatic resolution checking
+- [x] Dual-mode resolution checking (simulation vs live)
+- [x] Duplicate trade prevention (filters existing positions)
+- [x] Location injection in market questions (city names from tickers)
+- [x] Automatic resolution checking (hourly)
 - [x] City diversification and risk management
 - [x] Simplified CLI commands
 - [x] VPS deployment support (tmux + systemd)
 - [x] Position sizing optimization
 - [x] Trade history and performance analytics
+- [x] Comprehensive logging with file output
 
 ### 🚧 Future Enhancements
 - [ ] Web dashboard for monitoring

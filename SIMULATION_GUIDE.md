@@ -73,17 +73,29 @@ LOG_DIR=./logs
 
 ### Resolution Tracking (Every Hour)
 
-1. **Checks all open trades** via Kalshi API
-2. **Identifies resolved markets**
-3. **Calculates P&L** (win/loss)
-4. **Updates database automatically**
+The bot uses **dual-mode resolution checking**:
+
+**Simulation Mode (what you're running):**
+1. **Queries Kalshi markets API** with `status=settled` parameter
+2. **Extracts series tickers** from open trades (e.g., KXLOWTDEN, KXHIGHTSEA)
+3. **Fetches finalized markets** for those series
+4. **Matches trades to resolved markets** and calculates P&L
+5. **Updates database** with win/loss and profit
+
+**Live Mode (after validation):**
+1. **Queries Kalshi settlements API** for actual settled positions
+2. **Calculates real P&L** from executed trades
+3. **Updates database** with real money results
+
+Note: Simulation mode doesn't create real Kalshi positions, so it uses a different API endpoint than live mode.
 
 ### Risk Management
 
 - **Daily exposure cap**: 5% of bankroll ($50 if $1,000 bankroll)
 - **Daily trade limit**: Max 50 trades/day
-- **Position sizing**: $0.50-$5 based on price extremity
+- **Position sizing**: $0.50-$1.50 based on price extremity
 - **Diversification**: Max 3 trades per city
+- **Duplicate prevention**: Bot automatically filters out markets with existing open positions
 
 ---
 
@@ -259,9 +271,16 @@ python bot.py balance --platform kalshi
 # Check open trades
 python bot.py trades --simulation | Select-String "pending"
 
-# Manual resolution (see above section)
-# OR wait - markets take 1-2 days to resolve
+# Check bot logs for resolution checker activity
+tail -f logs/bot.log | grep "Checking for market resolutions"
+
+# Recent fix (January 2026): Dual-mode resolution checker
+# Simulation mode now queries markets API instead of settlements API
+# Update to latest version if you're seeing 0 resolved trades:
+git pull origin main
 ```
+
+**Note:** Markets typically resolve 6-12 hours after the forecast date. For example, a "Jan 26" market won't resolve until Jan 27 morning. Be patient!
 
 ---
 

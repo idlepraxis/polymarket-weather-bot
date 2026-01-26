@@ -1,9 +1,10 @@
 # Polymarket Weather Bot: Complete Architecture Map
 
-**Version:** 2.1.0 (Automated Bot with P&L Tracking)
-**Last Updated:** January 15, 2026
+**Version:** 2.2.0 (Dual-Mode Resolution + Duplicate Prevention)
+**Last Updated:** January 26, 2026
 **Purpose:** Comprehensive program map for context preservation and future development
 
+**New in v2.2:** Dual-mode resolution checking, duplicate prevention, location injection, logging fixes
 **New in v2.1:** Automated bot runner with daemon mode, P&L tracking, and simplified CLI
 
 ---
@@ -110,11 +111,14 @@
 
 ### Core Application Files
 
-**bot/application/bot_runner.py** (500+ lines) ⭐ NEW in v2.1
+**bot/application/bot_runner.py** (600+ lines) ⭐ UPDATED in v2.2
 - Automated daemon with main loop
 - `start()` - Main loop (scan every 6h, resolve every 1h)
 - `_scan_and_trade()` - Find and execute opportunities
-- `_check_resolutions()` - Update resolved trades with P&L
+- `_check_resolutions()` - Dual-mode: simulation vs live checking
+- `_check_kalshi_markets_simulation()` - NEW: Query finalized markets
+- `_check_kalshi_settlements()` - Query settlements for live trades
+- `_filter_existing_positions()` - NEW: Prevent duplicate trades
 - Enforces daily limits and risk management
 
 **bot/application/extreme_value_strategy.py** (372 lines)
@@ -123,12 +127,13 @@
 - `_calculate_position_size()` - Target ~$1 per trade
 - Conservative probability estimation (2.5x multiplier)
 
-**bot/database/trade_history.py** (350+ lines) ⭐ NEW in v2.1
+**bot/database/trade_history.py** (400+ lines) ⭐ UPDATED in v2.2
 - SQLite P&L tracking system
 - `log_trade()` - Insert new trade
 - `update_resolution()` - Mark trade as resolved with P&L
 - `get_pnl_summary()` - Calculate win rate, ROI, total P&L
 - `get_open_trades()` - Fetch unresolved positions
+- `get_open_market_ids()` - NEW: Get markets with existing positions
 
 ### CLI & Interface
 
@@ -140,11 +145,14 @@
 
 ### Platform Connectors
 
-**bot/connectors/kalshi.py** (700+ lines)
+**bot/connectors/kalshi.py** (800+ lines) - UPDATED in v2.2
 - Kalshi API integration with RSA-PSS auth
 - `get_all_markets()` - Fetch ~72 weather markets
 - `execute_limit_order()` - Place trades
 - `get_market()` - Check resolution status
+- `get_finalized_markets_by_series()` - NEW: Query settled markets by series
+- `_extract_location_from_ticker()` - NEW: Parse city from ticker codes
+- Location injection into market questions
 
 **bot/connectors/polymarket.py** (900+ lines)
 - Polymarket + Chainstack integration
@@ -167,8 +175,11 @@
 - `TradeSignal` - Trade opportunity
 - `Trade` - Executed trade record
 
-**bot/utils/logger.py** (50+ lines)
+**bot/utils/logger.py** (100+ lines) - FIXED in v2.2
 - Centralized logging configuration
+- `get_logger()` - Global logger singleton with file logging
+- `setup_logger()` - Configure handlers (console + file)
+- FIXED: Now initializes with file handlers from first call
 - Logs to console and logs/bot.log file
 
 ---
@@ -252,6 +263,44 @@ EXTREME_NO_MIN_YES_PRICE=0.40    # Buy NO if YES > 40¢
 **Commit:** 86e08b7
 **Impact:** CRITICAL - Resolution checking was 100% broken
 
+### Issue 9: Settlements API Empty for Simulation (January 24-26, 2026)
+**Symptom:** 0 resolved trades despite 80+ simulation trades placed
+**Cause:** Settlements API only returns real positions (live mode), not simulation trades
+**Fix:** Implemented dual-mode resolution checking
+  - Simulation: Query markets API with `status=settled`
+  - Live: Use settlements API for real positions
+**Files:** bot_runner.py (added `_check_kalshi_markets_simulation()`)
+          kalshi.py (added `get_finalized_markets_by_series()`)
+**Commits:** Multiple during Phase 8-9
+**Impact:** CRITICAL - Resolution checking 100% broken for simulation mode
+
+### Issue 10: Duplicate Trades on Same Markets (January 25-26, 2026)
+**Symptom:** Bot placing 80-120 trades/day despite only ~20 new markets
+**Cause:** No duplicate prevention - every scan re-traded existing positions
+**Fix:** Added `_filter_existing_positions()` to check database before trading
+**Files:** bot_runner.py (added filter method)
+          trade_history.py (added `get_open_market_ids()`)
+**Impact:** HIGH - Wasting capital on duplicate positions
+
+### Issue 11: Empty Log Files (January 25-26, 2026)
+**Symptom:** logs/bot.log at 0 bytes despite bot running for days
+**Cause:** Global logger initialized without file handlers
+  - KalshiClient calls `get_logger()` first during import
+  - Logger created with console-only handlers
+  - Later calls to setup_logger had no effect (singleton already exists)
+**Fix:** Modified `get_logger()` to always call `setup_logger(log_dir="logs")`
+**File:** logger.py:98-103
+**Impact:** HIGH - Impossible to debug issues without logs
+
+### Issue 12: Missing Location in Market Questions (January 26, 2026)
+**Symptom:** Questions show "Will the minimum temperature be 15-16°" without city
+**Cause:** Kalshi API doesn't include city in question, only in ticker (KXLOWTDEN)
+**Fix:** Added `_extract_location_from_ticker()` to parse city from ticker
+  - Extracts city code (SEA, CHI, DEN, etc.)
+  - Injects into question: "Will the minimum temperature in Denver be..."
+**File:** kalshi.py (added location extraction and injection logic)
+**Impact:** MEDIUM - UI clarity improvement
+
 ---
 
 ## Database Schema
@@ -289,6 +338,6 @@ CREATE TABLE trades (
 
 ---
 
-**Version:** 2.1.1
-**Last Updated:** January 16, 2026
-**Status:** Production - Running on VPS (Resolution checking fixed)
+**Version:** 2.2.0
+**Last Updated:** January 26, 2026
+**Status:** Production - Running on VPS with dual-mode resolution, duplicate prevention, and location injection
