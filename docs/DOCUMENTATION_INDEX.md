@@ -1,7 +1,7 @@
 # Documentation Index
 
 **Purpose:** Master index of all documentation - Quick navigation to all docs
-**Last Updated:** January 26, 2026
+**Last Updated:** January 27, 2026
 
 ---
 
@@ -57,6 +57,7 @@ polymarket-weather-bot/
 | Document | Purpose | Use When |
 |----------|---------|----------|
 | `TRADER_ANALYSIS.md` | Research on successful traders | Validating strategy choices |
+| `STRATEGY_OPTIMIZATION_JAN_2026.md` | Strategy parameter optimization analysis | Tuning scan frequency, edge thresholds, position sizing |
 
 ---
 
@@ -166,7 +167,7 @@ Every implementation guide should have:
 
 ---
 
-**Document Count:** 10 markdown files
+**Document Count:** 11 markdown files
 **Scripts:** 11 utility/diagnostic scripts in `../scripts/`
 **Tests:** 5 test files in `../tests/`
 **Last Major Update:** v2.2.0 - Dual-mode resolution, duplicate prevention, location injection (Jan 26, 2026)
