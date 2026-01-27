@@ -32,10 +32,13 @@ class KalshiClient:
         self.logger = get_logger()
 
         # API endpoints
-        if config.kalshi_use_demo:
+        if config.kalshi_api_base:
+            # Use configured API base (allows custom endpoints)
+            self.api_base = config.kalshi_api_base
+        elif config.kalshi_use_demo:
             self.api_base = "https://demo-api.kalshi.co/trade-api/v2"
         else:
-            self.api_base = "https://api.elections.kalshi.com/trade-api/v2"
+            self.api_base = "https://trading-api.kalshi.com/trade-api/v2"
 
         # Authentication credentials
         self.api_key_id = config.kalshi_api_key_id
@@ -94,8 +97,10 @@ class KalshiClient:
 
         try:
             # Load the RSA private key from PEM format
+            # Replace literal \n with actual newlines (for .env file compatibility)
+            pem_data = self.api_private_key_pem.replace('\\n', '\n')
             self.private_key = serialization.load_pem_private_key(
-                self.api_private_key_pem.encode('utf-8'),
+                pem_data.encode('utf-8'),
                 password=None,
                 backend=default_backend()
             )
