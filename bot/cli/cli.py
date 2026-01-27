@@ -820,11 +820,11 @@ def bot_start(
     """Start the automated trading bot.
 
     The bot will:
-    - Scan for opportunities every 6 hours
-    - Execute trades automatically (20-30 per day max)
-    - Check for market resolutions every hour
+    - Scan for opportunities based on configured interval (default: 6 hours)
+    - Execute trades automatically based on strategy parameters
+    - Check for market resolutions periodically (default: every hour)
     - Update P&L automatically
-    - Apply risk management (max 5% daily exposure)
+    - Apply risk management (default: max 5% daily exposure)
     """
     try:
         mode = "SIMULATION" if simulation else "LIVE"
@@ -844,11 +844,11 @@ def bot_start(
         console.print("\nConfiguration:")
         console.print(f"  Platform: {platform.upper()}")
         console.print(f"  Mode: {mode}")
-        console.print(f"  Scan interval: 6 hours")
-        console.print(f"  Max trades/scan: 20")
-        console.print(f"  Max trades/day: 50")
-        console.print(f"  Max exposure/day: 5% of bankroll")
-        console.print(f"  Resolution checks: Every 1 hour")
+        console.print(f"  Scan interval: {bot.config.scan_interval_hours} hours")
+        console.print(f"  Max trades/scan: {bot.config.max_trades_per_scan}")
+        console.print(f"  Max trades/day: {bot.config.max_trades_per_day}")
+        console.print(f"  Max exposure/day: {bot.config.max_daily_exposure_pct}% of bankroll")
+        console.print(f"  Resolution checks: Every {bot.config.resolution_check_hours} hour")
         console.print("\nCommands:")
         console.print("  python bot.py bot-status   - Check bot status and P&L")
         console.print("  python bot.py bot-stop     - Stop the bot")
