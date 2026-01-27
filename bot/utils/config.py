@@ -38,7 +38,7 @@ class Config(BaseSettings):
     telegram_chat_id: Optional[str] = Field(None, alias="TELEGRAM_CHAT_ID")
 
     # Kalshi API (supports both API key and email/password)
-    kalshi_api_base: Optional[str] = Field("https://trading-api.kalshi.com/trade-api/v2", alias="KALSHI_API_BASE")
+    kalshi_api_base: Optional[str] = Field("https://api.elections.kalshi.com/trade-api/v2", alias="KALSHI_API_BASE")
     kalshi_api_key_id: Optional[str] = Field(None, alias="KALSHI_API_KEY_ID")
     kalshi_api_private_key: Optional[str] = Field(None, alias="KALSHI_API_PRIVATE_KEY")
     kalshi_email: Optional[str] = Field(None, alias="KALSHI_EMAIL")

@@ -38,7 +38,7 @@ class KalshiClient:
         elif config.kalshi_use_demo:
             self.api_base = "https://demo-api.kalshi.co/trade-api/v2"
         else:
-            self.api_base = "https://trading-api.kalshi.com/trade-api/v2"
+            self.api_base = "https://api.elections.kalshi.com/trade-api/v2"
 
         # Authentication credentials
         self.api_key_id = config.kalshi_api_key_id
