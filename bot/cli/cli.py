@@ -907,8 +907,8 @@ def bot_status(
         # Get open trades
         open_trades = trade_db.get_open_trades(simulation=simulation, platform=platform)
 
-        # Get recent trades
-        recent_trades = trade_db.get_trades(simulation=simulation, platform=platform, limit=5)
+        # Get recent trades (show more for better visibility)
+        recent_trades = trade_db.get_trades(simulation=simulation, platform=platform, limit=20)
 
         mode = "SIMULATION" if simulation else "LIVE"
         mode_color = "yellow" if simulation else "green"
