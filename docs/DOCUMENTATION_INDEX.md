@@ -59,18 +59,6 @@ polymarket-weather-bot/
 | `TRADER_ANALYSIS.md` | Research on successful traders | Validating strategy choices |
 | `STRATEGY_OPTIMIZATION_JAN_2026.md` | Strategy parameter optimization analysis | Tuning scan frequency, edge thresholds, position sizing |
 
-### 🛠️ Development Guidelines
-
-| Document | Purpose | Use When |
-|----------|---------|----------|
-| `KARPATHY_GUIDELINES.md` | Coding principles to reduce LLM mistakes | Working with AI assistants on code changes |
-
-**Key Principles:**
-- Think before coding - surface assumptions and tradeoffs
-- Simplicity first - minimum code that solves the problem
-- Surgical changes - touch only what's necessary
-- Goal-driven execution - define success criteria upfront
-
 ---
 
 ## 🎯 How to Use This Index
@@ -179,7 +167,7 @@ Every implementation guide should have:
 
 ---
 
-**Document Count:** 12 markdown files
+**Document Count:** 11 markdown files
 **Scripts:** 11 utility/diagnostic scripts in `../scripts/`
 **Tests:** 5 test files in `../tests/`
 **Last Major Update:** v2.2.0 - Dual-mode resolution, duplicate prevention, location injection (Jan 26, 2026)
