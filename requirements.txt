@@ -1,12 +1,12 @@
 # Blockchain & Web3 (only needed for Polymarket - not required for Kalshi)
-# web3==6.11.1
-# eth-account>=0.13.0
+web3>=7.0.0
+# eth-account pulled in by web3
 # eth-keys>=0.5.0
 # eth-utils>=2.3.1
 # pycryptodome==3.19.0
 
 # Polymarket SDKs (not needed for Kalshi)
-# py-clob-client==0.34.4
+py-clob-client==0.34.4
 # py-order-utils==0.3.2
 
 # Kalshi API (RSA signing)
@@ -32,8 +32,8 @@ python-dotenv==1.0.0
 # Utilities
 tenacity==8.2.3
 backoff==2.2.1
-pandas==2.1.4
-numpy==1.26.2
+pandas>=2.1.4
+numpy>=1.26.2
 
 # Async
 aiohttp==3.9.1
