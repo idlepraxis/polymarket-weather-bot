@@ -49,15 +49,8 @@ class PolymarketClient:
 
         # WebSocket for real-time events (optional, for monitoring)
         try:
-            # web3 v7+ uses WebsocketProvider (lowercase 's')
-            if hasattr(Web3, 'WebsocketProvider'):
-                self.web3_ws = Web3(Web3.WebsocketProvider(self.config.chainstack_ws_url))
-            elif hasattr(Web3, 'WebSocketProvider'):
-                self.web3_ws = Web3(Web3.WebSocketProvider(self.config.chainstack_ws_url))
-            else:
-                # web3 v7.x moved providers - try direct import
-                from web3.providers import WebsocketProvider
-                self.web3_ws = Web3(WebsocketProvider(self.config.chainstack_ws_url))
+            # web3 v7+ - use LegacyWebSocketProvider for sync code
+            self.web3_ws = Web3(Web3.LegacyWebSocketProvider(self.config.chainstack_ws_url))
             try:
                 if callable(geth_poa_middleware):
                     self.web3_ws.middleware_onion.inject(geth_poa_middleware, layer=0)
