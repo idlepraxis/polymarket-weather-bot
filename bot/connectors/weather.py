@@ -201,7 +201,9 @@ class WeatherConnector:
 
         for item in forecast_list:
             forecast_time = datetime.fromtimestamp(item["dt"])
-            diff = abs((forecast_time - target_date).total_seconds())
+            # Ensure both datetimes are naive for comparison
+            target_naive = target_date.replace(tzinfo=None) if target_date.tzinfo else target_date
+            diff = abs((forecast_time - target_naive).total_seconds())
 
             if diff < min_diff:
                 min_diff = diff

@@ -1,7 +1,7 @@
 """Tests for weather API endpoint."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from bot.connectors.weather import WeatherConnector
 from bot.utils.config import Config
@@ -77,6 +77,37 @@ class TestOpenWeatherAPI:
         # C = (F - 32) * 5/9
         expected_high_c = (forecast.temp_high_f - 32) * 5 / 9
         assert abs(forecast.temp_high_c - expected_high_c) < 1, "Temperature conversion mismatch"
+
+    def test_timezone_aware_datetime(self, weather_connector):
+        """Test that timezone-aware datetimes work correctly.
+
+        This test verifies the fix for:
+        TypeError: can't subtract offset-naive and offset-aware datetimes
+        """
+        # Create a timezone-aware datetime (UTC)
+        target_date_utc = datetime.now(timezone.utc) + timedelta(days=1)
+
+        forecast = weather_connector._get_openweather_forecast("Miami", target_date_utc)
+
+        assert forecast is not None, "Should handle timezone-aware datetime"
+        assert forecast.location == "Miami"
+
+        print(f"\nForecast for Miami (using UTC datetime) on {target_date_utc.date()}:")
+        print(f"  High: {forecast.temp_high_f:.1f}°F")
+
+    def test_timezone_aware_with_offset(self, weather_connector):
+        """Test with a non-UTC timezone offset."""
+        # Create datetime with EST offset (-5 hours)
+        est = timezone(timedelta(hours=-5))
+        target_date_est = datetime.now(est) + timedelta(days=1)
+
+        forecast = weather_connector._get_openweather_forecast("Boston", target_date_est)
+
+        assert forecast is not None, "Should handle datetime with timezone offset"
+        assert forecast.location == "Boston"
+
+        print(f"\nForecast for Boston (using EST datetime) on {target_date_est.date()}:")
+        print(f"  High: {forecast.temp_high_f:.1f}°F")
 
 
 if __name__ == "__main__":
