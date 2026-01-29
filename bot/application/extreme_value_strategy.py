@@ -249,7 +249,13 @@ class ExtremeValueStrategy:
             # Parse market question
             parsed = self.weather.parse_market_question(market.question)
 
-            if not parsed["location"] or not parsed["threshold"]:
+            if not parsed["location"]:
+                self.logger.debug(f"Could not parse location from: {market.question}")
+                return self._conservative_estimate(market.yes_price, outcome)
+
+            # Need either a threshold or a range
+            if not parsed["threshold"] and not parsed["is_range"]:
+                self.logger.debug(f"Could not parse threshold/range from: {market.question}")
                 return self._conservative_estimate(market.yes_price, outcome)
 
             # Get forecast
@@ -259,14 +265,29 @@ class ExtremeValueStrategy:
             )
 
             if not forecast:
+                self.logger.debug(f"No forecast available for {parsed['location']} on {forecast_date}")
                 return self._conservative_estimate(market.yes_price, outcome)
 
-            # Calculate probability
-            fair_prob = self.weather.calculate_probability(
-                forecast=forecast,
-                threshold=parsed["threshold"],
-                threshold_type=parsed["threshold_type"] or "high_temp_f",
-            )
+            # Calculate probability based on market type
+            if parsed["is_range"]:
+                # Range market (Kalshi style: "48-49°")
+                fair_prob = self.weather.calculate_range_probability(
+                    forecast=forecast,
+                    range_low=parsed["range_low"],
+                    range_high=parsed["range_high"],
+                    threshold_type=parsed["threshold_type"] or "high_temp_f",
+                )
+                self.logger.debug(
+                    f"Range probability for {parsed['range_low']}-{parsed['range_high']}°: "
+                    f"{fair_prob:.1%} (forecast: {forecast.temp_high_f if parsed['threshold_type'] == 'high_temp_f' else forecast.temp_low_f}°F)"
+                )
+            else:
+                # Threshold market (">55°" or "above 70")
+                fair_prob = self.weather.calculate_probability(
+                    forecast=forecast,
+                    threshold=parsed["threshold"],
+                    threshold_type=parsed["threshold_type"] or "high_temp_f",
+                )
 
             if outcome == "NO":
                 fair_prob = 1 - fair_prob
@@ -280,15 +301,18 @@ class ExtremeValueStrategy:
     def _conservative_estimate(self, yes_price: float, outcome: str) -> float:
         """Conservative probability estimate when no forecast available.
 
-        Assumes extreme prices are usually wrong by 2-3x.
+        IMPORTANT: Without actual weather data, we have NO EDGE.
+        Return the market price (no edge) to effectively skip the trade.
+
+        The old logic assumed 2-3x edge without data, which was wrong.
         """
         if outcome == "YES":
-            # If market says 10%, assume reality is 20-30%
-            return min(yes_price * 2.5, 0.35)
+            # No forecast = no edge, use market price
+            # This will result in edge = 0 and trade being skipped
+            return yes_price
         else:  # NO
-            # If market says YES is 60%, assume reality is 40-50%
-            estimated_yes = min(yes_price * 0.75, 0.50)
-            return 1 - estimated_yes
+            # No forecast = no edge, use market price
+            return 1 - yes_price
 
     def _calculate_confidence(self, yes_price: float, side: str) -> float:
         """Calculate confidence in the trade.
