@@ -63,7 +63,7 @@ bankroll: float = Field(1000.0, alias="BANKROLL")
 
 ## Required vs Optional Settings
 
-### ✅ REQUIRED (Bot won't start without these)
+### ✅ REQUIRED (Bot won't work properly without these)
 
 ```bash
 # Kalshi credentials - PICK ONE METHOD:
@@ -76,7 +76,14 @@ KALSHI_API_PRIVATE_KEY=your_private_key
 
 # Capital
 BANKROLL=1000.0                       # How much money to trade with
+
+# Weather API - AT LEAST ONE REQUIRED (free tiers available)
+OPENWEATHER_API_KEY=your_key          # https://openweathermap.org/api
+# OR
+WEATHERAPI_KEY=your_key               # https://www.weatherapi.com/
 ```
+
+> ⚠️ **CRITICAL**: Without a weather API key, the bot cannot calculate real probabilities and will skip all trades. The strategy requires actual weather forecasts to identify mispricings.
 
 ### ⚙️ RECOMMENDED (Should set these, but have defaults)
 
@@ -143,8 +150,10 @@ LOG_DIR=./logs                        # Default: ./logs
 
 | Setting | What It Does | Default |
 |---------|--------------|---------|
-| `EXTREME_YES_MAX_PRICE` | Only buy YES if price below this | 0.15 (15¢) |
-| `EXTREME_NO_MIN_YES_PRICE` | Only buy NO if YES above this | 0.40 (40¢) |
+| `EXTREME_YES_MAX_PRICE` | Only buy YES if price below this | 0.12 (12¢) |
+| `EXTREME_NO_MIN_YES_PRICE` | Only buy NO if YES above this | 0.60 (60¢) |
+
+> **Note on NO threshold**: Buying NO when YES > 60% means NO costs < 40¢, giving a 1.5x+ payoff ratio. The old 40% threshold resulted in buying NO at 55-60¢ (terrible 0.8x payoff).
 
 ---
 
