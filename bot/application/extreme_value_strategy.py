@@ -368,7 +368,11 @@ class ExtremeValueStrategy:
         filtered = []
 
         for signal in signals:
-            hours_until = (signal.market.end_date - now).total_seconds() / 3600
+            # Ensure end_date is timezone-aware for comparison
+            end_date = signal.market.end_date
+            if end_date.tzinfo is None:
+                end_date = end_date.replace(tzinfo=timezone.utc)
+            hours_until = (end_date - now).total_seconds() / 3600
 
             if min_hours <= hours_until <= max_hours:
                 filtered.append(signal)
