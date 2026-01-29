@@ -47,15 +47,18 @@ This creates **systematic mispricings** that can be exploited.
 ### The Rules (Dead Simple)
 
 ```
-✅ BUY YES shares when price < 10-15¢
-✅ BUY NO shares when YES price > 40-50¢
-✅ Position size: $0.50 - $1.00 (max $5 for great opportunities)
+✅ BUY YES shares when price < 10-12¢
+✅ BUY NO shares when YES price > 60¢ (NO costs < 40¢)
+✅ Position size: $0.50 - $2.50
 ✅ High volume: 3-5+ trades per day
+✅ Verify with weather forecast (don't bet blind!)
 ❌ Never buy YES above 15¢
-❌ Never buy NO when YES below 40¢
+❌ Never buy NO when YES below 60¢ (bad payoff ratio)
 ```
 
-That's it. No complex models. No machine learning. Just **strict price discipline**.
+That's it. Weather forecasts provide the edge. Strict price discipline provides the payoff.
+
+> ⚠️ **CRITICAL**: The strategy requires a **weather API key** to calculate real probabilities. Without it, the bot cannot identify mispricings and will skip trades.
 
 ---
 
@@ -154,12 +157,13 @@ YES ≤ 15¢:  $0.50 (acceptable)
 
 **NO Purchases (when YES is expensive):**
 ```
-YES ≥ 60¢:  $5.00 (NO is super cheap)
-YES ≥ 55¢:  $2.00 (NO is very cheap)
-YES ≥ 50¢:  $1.00 (NO is cheap)
-YES ≥ 45¢:  $0.75 (NO is fair)
-YES ≥ 40¢:  $0.50 (NO is acceptable)
+YES ≥ 75¢:  $2.50 (NO costs 25¢, 3x payoff)
+YES ≥ 70¢:  $2.00 (NO costs 30¢, 2.3x payoff)
+YES ≥ 65¢:  $1.50 (NO costs 35¢, 1.9x payoff)
+YES ≥ 60¢:  $1.00 (NO costs 40¢, 1.5x payoff)
 ```
+
+> **Important**: Never buy NO when YES < 60%. At YES=50%, NO costs 50¢ with only 1x payoff (break even). At YES=45%, NO costs 55¢ with 0.8x payoff (losing proposition!).
 
 **Rationale:**
 - At 5¢, $1 buys 20 shares (great upside, but limit position to manage risk)
@@ -326,17 +330,23 @@ python bot.py extreme-scan --yes-max 0.20 --no-min-yes 0.35
 Add these to your `.env` file:
 
 ```bash
+# REQUIRED: Weather API (at least one)
+OPENWEATHER_API_KEY=your_key      # Get free key at openweathermap.org
+WEATHERAPI_KEY=your_key           # Alternative: weatherapi.com
+
 # Extreme Value Strategy Settings
-EXTREME_YES_MAX_PRICE=0.15        # Max price to buy YES
-EXTREME_YES_IDEAL_PRICE=0.10      # Ideal YES price
-EXTREME_NO_MIN_YES_PRICE=0.40     # Min YES price to buy NO
-EXTREME_NO_IDEAL_YES_PRICE=0.50   # Ideal YES price for NO
+EXTREME_YES_MAX_PRICE=0.12        # Max price to buy YES (12¢)
+EXTREME_YES_IDEAL_PRICE=0.08      # Ideal YES price (8¢)
+EXTREME_NO_MIN_YES_PRICE=0.60     # Min YES price to buy NO (60¢)
+EXTREME_NO_IDEAL_YES_PRICE=0.70   # Ideal YES price for NO (70¢)
 
 # Position Sizing
-EXTREME_MIN_POSITION=0.50         # Min position size
-EXTREME_MAX_POSITION=1.00         # Standard max position
-EXTREME_AGGRESSIVE_MAX=1.50       # Max for great opportunities
+EXTREME_MIN_POSITION=0.75         # Min position size
+EXTREME_MAX_POSITION=1.50         # Standard max position
+EXTREME_AGGRESSIVE_MAX=2.50       # Max for great opportunities
 ```
+
+> ⚠️ **Weather API is REQUIRED**: Without weather data, the bot cannot calculate probabilities and will not place trades.
 
 ---
 
