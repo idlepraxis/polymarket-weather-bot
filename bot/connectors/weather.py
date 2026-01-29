@@ -73,8 +73,7 @@ class WeatherConnector:
         """Get forecast from OpenWeatherMap API."""
         try:
             # First, get coordinates for location
-            geo_url = "https://api.openweathermap.org/data/2.5/weather"
-            # geo_url = "http://api.openweathermap.org/geo/1.0/direct"
+            geo_url = "http://api.openweathermap.org/geo/1.0/direct"
             geo_params = {"q": location, "limit": 1, "appid": self.config.openweather_api_key}
 
             geo_response = httpx.get(geo_url, params=geo_params, timeout=10.0)
