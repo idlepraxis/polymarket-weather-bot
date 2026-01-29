@@ -5,6 +5,62 @@ All notable changes to the Polymarket Weather Bot will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-29
+
+### Added
+- **Kalshi market format parser**: Properly parses Kalshi-specific question formats
+  - Range markets: "48-49°", "56° to 57°"
+  - Threshold markets: ">13°", "<13°"
+  - Date formats: "Jan 27, 2026"
+- **Range probability calculation**: New `calculate_range_probability()` method
+  - Calculates P(temp falls within X-Y°) using normal distribution
+  - Enables accurate probability estimates for Kalshi's bucket-style markets
+- **Weather API integration**: Real weather forecasts now drive probability estimates
+  - Supports OpenWeatherMap API (free tier)
+  - Supports WeatherAPI.com as backup
+  - Ensemble averaging when multiple APIs configured
+
+### Fixed
+- **CRITICAL**: Strategy was betting blind without actual weather data
+  - Parser couldn't extract temperature thresholds from Kalshi format
+  - Fell back to hardcoded 35%/65% probability estimates
+  - Now uses real weather forecasts for probability calculation
+- **CRITICAL**: NO trade threshold was too low (45% → 60%)
+  - Old threshold: Buy NO when YES > 45% (NO costs 55¢, terrible 0.8x payoff)
+  - New threshold: Buy NO when YES > 60% (NO costs 40¢, good 1.5x payoff)
+  - This was causing systematic losses on NO trades
+- **CRITICAL**: Conservative fallback assumed fake edge
+  - Old behavior: When no forecast available, assumed 35% fair prob for YES
+  - New behavior: Returns market price (no edge = skip trade)
+  - Prevents betting without actual information advantage
+
+### Changed
+- Weather API keys now **REQUIRED** for strategy to function
+  - `OPENWEATHER_API_KEY` or `WEATHERAPI_KEY` must be set
+  - Without weather data, bot will skip trades (no fake edge)
+- Updated default NO threshold from 0.45 to 0.60
+- Parser now returns `is_range`, `range_low`, `range_high` fields
+- Improved debug logging for probability calculations
+
+### Technical Details
+
+#### Files Modified
+- `bot/connectors/weather.py`:
+  - Rewrote `parse_market_question()` to handle Kalshi formats
+  - Added `calculate_range_probability()` for bucket markets
+  - Added support for "Jan 27, 2026" date format
+- `bot/application/extreme_value_strategy.py`:
+  - Updated `_estimate_fair_probability()` to use range calculations
+  - Fixed `_conservative_estimate()` to not assume fake edge
+  - Added debug logging for probability estimates
+
+#### Configuration Changes
+- `EXTREME_NO_MIN_YES_PRICE`: Default changed from 0.45 to 0.60
+- `EXTREME_NO_IDEAL_YES_PRICE`: Default changed from 0.55 to 0.70
+- `OPENWEATHER_API_KEY`: Now required (was optional)
+
+---
+
 ## [2.2.0] - 2026-01-26
 
 ### Added

@@ -262,22 +262,22 @@ class WeatherConnector:
         Returns:
             Probability between 0.0 and 1.0
         """
+        from math import erf, sqrt
+
+        # Weather forecast uncertainty - see calculate_range_probability() for detailed docs
+        # Using 4.0°F based on NWS verification data for 1-3 day forecasts
+        std_dev = 4.0
+
         if threshold_type == "high_temp_f":
             predicted = forecast.temp_high_f
             if predicted is None:
                 return 0.5
 
-            # Simple probabilistic model with uncertainty
-            # Assume ±5°F standard deviation
-            diff = predicted - threshold
-            std_dev = 5.0
-
-            # Convert to probability using normal distribution approximation
-            # If predicted is 5°F above threshold, ~84% chance
+            # Calculate P(temp > threshold) using normal CDF
+            # If predicted is 4°F above threshold, ~84% chance
             # If predicted equals threshold, ~50% chance
-            # If predicted is 5°F below threshold, ~16% chance
-            from math import erf, sqrt
-
+            # If predicted is 4°F below threshold, ~16% chance
+            diff = predicted - threshold
             z_score = diff / (std_dev * sqrt(2))
             probability = 0.5 * (1 + erf(z_score))
 
@@ -289,9 +289,6 @@ class WeatherConnector:
                 return 0.5
 
             diff = predicted - threshold
-            std_dev = 5.0
-            from math import erf, sqrt
-
             z_score = diff / (std_dev * sqrt(2))
             probability = 0.5 * (1 + erf(z_score))
 
@@ -303,11 +300,78 @@ class WeatherConnector:
         else:
             return 0.5  # Unknown threshold type
 
+    def calculate_range_probability(
+        self, forecast: WeatherForecast, range_low: float, range_high: float,
+        threshold_type: str = "high_temp_f"
+    ) -> float:
+        """Calculate probability that temperature falls within a range.
+
+        For Kalshi markets like "Will temp be 48-49°?"
+
+        Args:
+            forecast: Weather forecast data
+            range_low: Lower bound of range (e.g., 48)
+            range_high: Upper bound of range (e.g., 49)
+            threshold_type: Type of threshold (high_temp_f, low_temp_f)
+
+        Returns:
+            Probability between 0.0 and 1.0
+        """
+        from math import erf, sqrt
+
+        if threshold_type == "high_temp_f":
+            predicted = forecast.temp_high_f
+        elif threshold_type == "low_temp_f":
+            predicted = forecast.temp_low_f
+        else:
+            return 0.1  # Default low probability for unknown types
+
+        if predicted is None:
+            return 0.1
+
+        # Weather forecast uncertainty (standard deviation)
+        #
+        # WHY 4.0°F?
+        # - NWS studies show 1-day temperature forecasts have RMSE of 2-3°F
+        # - 3-day forecasts have RMSE of 4-5°F
+        # - We use 4.0°F as a conservative middle ground because:
+        #   1. Kalshi markets often resolve 1-3 days out
+        #   2. Slight overestimate of uncertainty is safer (avoids overconfidence)
+        #   3. Matches observed forecast error in NOAA verification data
+        #
+        # Source: https://www.weather.gov/media/oun/wxtech/vxpage/VerifIntro.pdf
+        # See also: "The Quiet Revolution of Numerical Weather Prediction" (Bauer et al., 2015)
+        #
+        # CALIBRATION NOTE: This value could be tuned based on:
+        # - Actual win rate vs predicted win rate from historical trades
+        # - If we're winning more than expected, std_dev is too high (reduce it)
+        # - If we're winning less than expected, std_dev is too low (increase it)
+        std_dev = 4.0
+
+        # Calculate P(range_low <= temp < range_high) using normal CDF
+        # P(a < X < b) = Phi((b - mu) / sigma) - Phi((a - mu) / sigma)
+        z_low = (range_low - predicted) / (std_dev * sqrt(2))
+        z_high = (range_high - predicted) / (std_dev * sqrt(2))
+
+        prob_below_high = 0.5 * (1 + erf(z_high))
+        prob_below_low = 0.5 * (1 + erf(z_low))
+
+        probability = prob_below_high - prob_below_low
+
+        # Clamp to reasonable bounds
+        return max(0.01, min(0.99, probability))
+
     def parse_market_question(self, question: str) -> Dict[str, any]:
         """Parse market question to extract location, threshold, and type.
 
+        Supports Kalshi formats:
+        - Ranges: "48-49°", "56° to 57°"
+        - Thresholds: ">13°", "<13°", "above 70", "below 70"
+        - Dates: "Jan 27, 2026", "MM/DD/YYYY", "YYYY-MM-DD"
+
         Returns:
-            Dict with keys: location, threshold, threshold_type, date
+            Dict with keys: location, threshold, threshold_type, date,
+                           range_low, range_high, is_range
         """
         import re
         from datetime import datetime
@@ -317,6 +381,9 @@ class WeatherConnector:
             "threshold": None,
             "threshold_type": None,
             "date": None,
+            "range_low": None,
+            "range_high": None,
+            "is_range": False,
         }
 
         # Extract location (common cities)
@@ -335,6 +402,8 @@ class WeatherConnector:
             "Seattle",
             "San Francisco",
             "SF",
+            "Phoenix",
+            "Atlanta",
         ]
 
         question_lower = question.lower()
@@ -343,46 +412,89 @@ class WeatherConnector:
                 result["location"] = city
                 break
 
-        # Extract temperature threshold
-        temp_patterns = [
-            r"(\d+)\s*°?[fF]",  # 70F or 70°F
-            r"(\d+)\s*degrees?\s*[fF]",  # 70 degrees F
-            r"exceed\s+(\d+)",  # exceed 70
-            r"above\s+(\d+)",  # above 70
-        ]
-
-        for pattern in temp_patterns:
-            match = re.search(pattern, question)
-            if match:
-                result["threshold"] = float(match.group(1))
-                result["threshold_type"] = "high_temp_f"
-                break
-
-        # Determine if it's about high or low temp
+        # Determine if it's about high or low temp FIRST
         if "low" in question_lower or "minimum" in question_lower:
             result["threshold_type"] = "low_temp_f"
         elif "high" in question_lower or "maximum" in question_lower:
             result["threshold_type"] = "high_temp_f"
+        else:
+            result["threshold_type"] = "high_temp_f"  # default
 
-        # Extract date (simple patterns)
-        # TODO: Improve date extraction
-        date_patterns = [
-            r"(\d{1,2})/(\d{1,2})/(\d{4})",  # MM/DD/YYYY
-            r"(\d{4})-(\d{2})-(\d{2})",  # YYYY-MM-DD
+        # Extract temperature - check for RANGE first (Kalshi format)
+        # Patterns: "48-49°", "56° to 57°", "48 to 49°"
+        range_patterns = [
+            r"(\d+)-(\d+)°",  # 48-49°
+            r"(\d+)°?\s*to\s*(\d+)°",  # 56° to 57° or 56 to 57°
         ]
 
-        for pattern in date_patterns:
+        for pattern in range_patterns:
             match = re.search(pattern, question)
             if match:
-                try:
-                    if "/" in pattern:
-                        month, day, year = match.groups()
-                        result["date"] = datetime(int(year), int(month), int(day))
-                    else:
-                        year, month, day = match.groups()
-                        result["date"] = datetime(int(year), int(month), int(day))
-                except:
-                    pass
+                result["range_low"] = float(match.group(1))
+                result["range_high"] = float(match.group(2))
+                result["threshold"] = (result["range_low"] + result["range_high"]) / 2
+                result["is_range"] = True
                 break
+
+        # If no range found, check for threshold (>, <, above, below)
+        if not result["is_range"]:
+            threshold_patterns = [
+                (r">\s*(\d+)°?", "above"),  # >13°
+                (r"<\s*(\d+)°?", "below"),  # <13°
+                (r"above\s+(\d+)", "above"),  # above 70
+                (r"below\s+(\d+)", "below"),  # below 70
+                (r"exceed\s+(\d+)", "above"),  # exceed 70
+                (r"(\d+)\s*°?[fF]", None),  # 70F or 70°F (generic)
+                (r"(\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
+            ]
+
+            for pattern, direction in threshold_patterns:
+                match = re.search(pattern, question)
+                if match:
+                    result["threshold"] = float(match.group(1))
+                    if direction:
+                        result["threshold_direction"] = direction
+                    break
+
+        # Extract date - support "Jan 27, 2026" format (Kalshi)
+        month_map = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        }
+
+        # Try "Jan 27, 2026" format first
+        month_date_match = re.search(
+            r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2}),?\s*(\d{4})",
+            question_lower
+        )
+        if month_date_match:
+            try:
+                month = month_map[month_date_match.group(1)]
+                day = int(month_date_match.group(2))
+                year = int(month_date_match.group(3))
+                result["date"] = datetime(year, month, day)
+            except:
+                pass
+
+        # Fallback to other date patterns
+        if not result["date"]:
+            date_patterns = [
+                r"(\d{1,2})/(\d{1,2})/(\d{4})",  # MM/DD/YYYY
+                r"(\d{4})-(\d{2})-(\d{2})",  # YYYY-MM-DD
+            ]
+
+            for pattern in date_patterns:
+                match = re.search(pattern, question)
+                if match:
+                    try:
+                        if "/" in pattern:
+                            month, day, year = match.groups()
+                            result["date"] = datetime(int(year), int(month), int(day))
+                        else:
+                            year, month, day = match.groups()
+                            result["date"] = datetime(int(year), int(month), int(day))
+                    except:
+                        pass
+                    break
 
         return result
