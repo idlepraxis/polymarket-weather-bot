@@ -260,22 +260,22 @@ class WeatherConnector:
         Returns:
             Probability between 0.0 and 1.0
         """
+        from math import erf, sqrt
+
+        # Weather forecast uncertainty - see calculate_range_probability() for detailed docs
+        # Using 4.0°F based on NWS verification data for 1-3 day forecasts
+        std_dev = 4.0
+
         if threshold_type == "high_temp_f":
             predicted = forecast.temp_high_f
             if predicted is None:
                 return 0.5
 
-            # Simple probabilistic model with uncertainty
-            # Assume ±5°F standard deviation
-            diff = predicted - threshold
-            std_dev = 5.0
-
-            # Convert to probability using normal distribution approximation
-            # If predicted is 5°F above threshold, ~84% chance
+            # Calculate P(temp > threshold) using normal CDF
+            # If predicted is 4°F above threshold, ~84% chance
             # If predicted equals threshold, ~50% chance
-            # If predicted is 5°F below threshold, ~16% chance
-            from math import erf, sqrt
-
+            # If predicted is 4°F below threshold, ~16% chance
+            diff = predicted - threshold
             z_score = diff / (std_dev * sqrt(2))
             probability = 0.5 * (1 + erf(z_score))
 
@@ -287,9 +287,6 @@ class WeatherConnector:
                 return 0.5
 
             diff = predicted - threshold
-            std_dev = 5.0
-            from math import erf, sqrt
-
             z_score = diff / (std_dev * sqrt(2))
             probability = 0.5 * (1 + erf(z_score))
 
@@ -331,7 +328,22 @@ class WeatherConnector:
             return 0.1
 
         # Weather forecast uncertainty (standard deviation)
-        # Typically 2-4°F for 1-day forecasts, 4-6°F for 3+ day forecasts
+        #
+        # WHY 4.0°F?
+        # - NWS studies show 1-day temperature forecasts have RMSE of 2-3°F
+        # - 3-day forecasts have RMSE of 4-5°F
+        # - We use 4.0°F as a conservative middle ground because:
+        #   1. Kalshi markets often resolve 1-3 days out
+        #   2. Slight overestimate of uncertainty is safer (avoids overconfidence)
+        #   3. Matches observed forecast error in NOAA verification data
+        #
+        # Source: https://www.weather.gov/media/oun/wxtech/vxpage/VerifIntro.pdf
+        # See also: "The Quiet Revolution of Numerical Weather Prediction" (Bauer et al., 2015)
+        #
+        # CALIBRATION NOTE: This value could be tuned based on:
+        # - Actual win rate vs predicted win rate from historical trades
+        # - If we're winning more than expected, std_dev is too high (reduce it)
+        # - If we're winning less than expected, std_dev is too low (increase it)
         std_dev = 4.0
 
         # Calculate P(range_low <= temp < range_high) using normal CDF

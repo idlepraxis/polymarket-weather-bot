@@ -242,7 +242,10 @@ class ExtremeValueStrategy:
             Estimated fair probability (0-1)
         """
         if not self.weather:
-            # No weather connector - use conservative estimates
+            # No weather connector - cannot calculate edge
+            self.logger.warning(
+                f"No weather connector configured - skipping trade (no edge without forecast)"
+            )
             return self._conservative_estimate(market.yes_price, outcome)
 
         try:
@@ -250,12 +253,18 @@ class ExtremeValueStrategy:
             parsed = self.weather.parse_market_question(market.question)
 
             if not parsed["location"]:
-                self.logger.debug(f"Could not parse location from: {market.question}")
+                self.logger.warning(
+                    f"SKIP: Could not parse location from: {market.question[:60]}... "
+                    f"(trade will be skipped - no edge without location)"
+                )
                 return self._conservative_estimate(market.yes_price, outcome)
 
             # Need either a threshold or a range
             if not parsed["threshold"] and not parsed["is_range"]:
-                self.logger.debug(f"Could not parse threshold/range from: {market.question}")
+                self.logger.warning(
+                    f"SKIP: Could not parse threshold/range from: {market.question[:60]}... "
+                    f"(trade will be skipped - no edge without threshold)"
+                )
                 return self._conservative_estimate(market.yes_price, outcome)
 
             # Get forecast
@@ -265,7 +274,10 @@ class ExtremeValueStrategy:
             )
 
             if not forecast:
-                self.logger.debug(f"No forecast available for {parsed['location']} on {forecast_date}")
+                self.logger.warning(
+                    f"SKIP: No forecast for {parsed['location']} on {forecast_date.strftime('%Y-%m-%d') if forecast_date else 'unknown'} "
+                    f"(trade will be skipped - no edge without forecast)"
+                )
                 return self._conservative_estimate(market.yes_price, outcome)
 
             # Calculate probability based on market type
@@ -304,8 +316,13 @@ class ExtremeValueStrategy:
         IMPORTANT: Without actual weather data, we have NO EDGE.
         Return the market price (no edge) to effectively skip the trade.
 
-        The old logic assumed 2-3x edge without data, which was wrong.
+        The old logic assumed 2-3x edge without data, which was wrong
+        and resulted in betting blind with imaginary edge.
         """
+        self.logger.debug(
+            f"Using conservative estimate (market price) for {outcome} - "
+            f"returning {yes_price:.1%} for YES, {1-yes_price:.1%} for NO (zero edge)"
+        )
         if outcome == "YES":
             # No forecast = no edge, use market price
             # This will result in edge = 0 and trade being skipped
