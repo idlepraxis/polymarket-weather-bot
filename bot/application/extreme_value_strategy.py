@@ -260,7 +260,8 @@ class ExtremeValueStrategy:
                 return self._conservative_estimate(market.yes_price, outcome)
 
             # Need either a threshold or a range
-            if not parsed["threshold"] and not parsed["is_range"]:
+            # Note: use "is None" since threshold=0 is valid (0°F)
+            if parsed["threshold"] is None and not parsed["is_range"]:
                 self.logger.warning(
                     f"SKIP: Could not parse threshold/range from: {market.question[:60]}... "
                     f"(trade will be skipped - no edge without threshold)"

@@ -169,6 +169,16 @@ class TestParseMarketQuestion:
         assert parsed["range_high"] == 0.0
         assert parsed["threshold"] == -0.5  # midpoint
 
+    def test_parse_zero_threshold(self, weather_connector):
+        """Test parsing zero temperature threshold (edge case for truthiness)."""
+        question = "Will the minimum temperature in New York be <0° on Jan 31, 2026?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "New York"
+        assert parsed["is_range"] == False
+        assert parsed["threshold"] == 0.0  # Must be 0.0, not None
+        assert parsed["threshold_direction"] == "below"
+
 
 class TestCalculateRangeProbability:
     """Tests for calculate_range_probability() function."""
