@@ -250,14 +250,16 @@ class WeatherConnector:
         )
 
     def calculate_probability(
-        self, forecast: WeatherForecast, threshold: float, threshold_type: str = "high_temp_f"
+        self, forecast: WeatherForecast, threshold: float, threshold_type: str = "high_temp_f",
+        direction: str = "above"
     ) -> float:
-        """Calculate probability that threshold will be exceeded/met.
+        """Calculate probability that threshold will be exceeded or not met.
 
         Args:
             forecast: Weather forecast data
             threshold: Threshold value (e.g., 70 for 70°F)
             threshold_type: Type of threshold (high_temp_f, low_temp_f, precipitation, etc.)
+            direction: "above" for P(temp > threshold), "below" for P(temp < threshold)
 
         Returns:
             Probability between 0.0 and 1.0
@@ -279,7 +281,11 @@ class WeatherConnector:
             # If predicted is 4°F below threshold, ~16% chance
             diff = predicted - threshold
             z_score = diff / (std_dev * sqrt(2))
-            probability = 0.5 * (1 + erf(z_score))
+            probability = 0.5 * (1 + erf(z_score))  # P(temp > threshold)
+
+            # If direction is "below", we want P(temp < threshold)
+            if direction == "below":
+                probability = 1 - probability
 
             return max(0.01, min(0.99, probability))
 
@@ -290,7 +296,11 @@ class WeatherConnector:
 
             diff = predicted - threshold
             z_score = diff / (std_dev * sqrt(2))
-            probability = 0.5 * (1 + erf(z_score))
+            probability = 0.5 * (1 + erf(z_score))  # P(temp > threshold)
+
+            # If direction is "below", we want P(temp < threshold)
+            if direction == "below":
+                probability = 1 - probability
 
             return max(0.01, min(0.99, probability))
 

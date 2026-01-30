@@ -294,11 +294,18 @@ class ExtremeValueStrategy:
                     f"{fair_prob:.1%} (forecast: {forecast.temp_high_f if parsed['threshold_type'] == 'high_temp_f' else forecast.temp_low_f}°F)"
                 )
             else:
-                # Threshold market (">55°" or "above 70")
+                # Threshold market (">55°" or "above 70" or "<49°")
+                # IMPORTANT: Pass threshold_direction to handle < vs > correctly
+                direction = parsed.get("threshold_direction", "above")
                 fair_prob = self.weather.calculate_probability(
                     forecast=forecast,
                     threshold=parsed["threshold"],
                     threshold_type=parsed["threshold_type"] or "high_temp_f",
+                    direction=direction,
+                )
+                self.logger.debug(
+                    f"Threshold probability for {direction} {parsed['threshold']}°: "
+                    f"{fair_prob:.1%} (forecast: {forecast.temp_high_f if parsed['threshold_type'] == 'high_temp_f' else forecast.temp_low_f}°F)"
                 )
 
             if outcome == "NO":
