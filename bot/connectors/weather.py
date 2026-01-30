@@ -429,10 +429,10 @@ class WeatherConnector:
             result["threshold_type"] = "high_temp_f"  # default
 
         # Extract temperature - check for RANGE first (Kalshi format)
-        # Patterns: "48-49°", "56° to 57°", "48 to 49°"
+        # Patterns: "48-49°", "56° to 57°", "48 to 49°", "-1-0°" (negative temps)
         range_patterns = [
-            r"(\d+)-(\d+)°",  # 48-49°
-            r"(\d+)°?\s*to\s*(\d+)°",  # 56° to 57° or 56 to 57°
+            r"(-?\d+)-(-?\d+)°",  # 48-49° or -1-0° (supports negative temps)
+            r"(-?\d+)°?\s*to\s*(-?\d+)°",  # 56° to 57° or -5° to -3°
         ]
 
         for pattern in range_patterns:
@@ -447,13 +447,13 @@ class WeatherConnector:
         # If no range found, check for threshold (>, <, above, below)
         if not result["is_range"]:
             threshold_patterns = [
-                (r">\s*(\d+)°?", "above"),  # >13°
-                (r"<\s*(\d+)°?", "below"),  # <13°
-                (r"above\s+(\d+)", "above"),  # above 70
-                (r"below\s+(\d+)", "below"),  # below 70
-                (r"exceed\s+(\d+)", "above"),  # exceed 70
-                (r"(\d+)\s*°?[fF]", None),  # 70F or 70°F (generic)
-                (r"(\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
+                (r">\s*(-?\d+)°?", "above"),  # >13° or >-5°
+                (r"<\s*(-?\d+)°?", "below"),  # <13° or <-1°
+                (r"above\s+(-?\d+)", "above"),  # above 70 or above -10
+                (r"below\s+(-?\d+)", "below"),  # below 70 or below -5
+                (r"exceed\s+(-?\d+)", "above"),  # exceed 70
+                (r"(-?\d+)\s*°?[fF]", None),  # 70F or -5°F (generic)
+                (r"(-?\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
             ]
 
             for pattern, direction in threshold_patterns:
