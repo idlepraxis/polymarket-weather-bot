@@ -137,6 +137,48 @@ class TestParseMarketQuestion:
         assert parsed["threshold"] is None
         assert parsed["is_range"] == False
 
+    def test_parse_negative_threshold_below(self, weather_connector):
+        """Test parsing negative temperature threshold (below)."""
+        question = "Will the minimum temperature in Chicago be <-1° on Jan 30, 2026?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "Chicago"
+        assert parsed["is_range"] == False
+        assert parsed["threshold"] == -1.0
+        assert parsed["threshold_direction"] == "below"
+        assert parsed["threshold_type"] == "low_temp_f"
+
+    def test_parse_negative_threshold_above(self, weather_connector):
+        """Test parsing negative temperature threshold (above)."""
+        question = "Will the minimum temperature in Chicago be >-5° on Jan 30, 2026?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "Chicago"
+        assert parsed["is_range"] == False
+        assert parsed["threshold"] == -5.0
+        assert parsed["threshold_direction"] == "above"
+
+    def test_parse_negative_range(self, weather_connector):
+        """Test parsing negative temperature range."""
+        question = "Will the minimum temperature in Chicago be -1-0° on Jan 30, 2026?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "Chicago"
+        assert parsed["is_range"] == True
+        assert parsed["range_low"] == -1.0
+        assert parsed["range_high"] == 0.0
+        assert parsed["threshold"] == -0.5  # midpoint
+
+    def test_parse_zero_threshold(self, weather_connector):
+        """Test parsing zero temperature threshold (edge case for truthiness)."""
+        question = "Will the minimum temperature in New York be <0° on Jan 31, 2026?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "New York"
+        assert parsed["is_range"] == False
+        assert parsed["threshold"] == 0.0  # Must be 0.0, not None
+        assert parsed["threshold_direction"] == "below"
+
 
 class TestCalculateRangeProbability:
     """Tests for calculate_range_probability() function."""

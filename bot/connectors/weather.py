@@ -42,13 +42,24 @@ class WeatherConnector:
         return forecast
 
     def _get_ensemble_forecast(self, location: str, date: datetime) -> Optional[WeatherForecast]:
-        """Get ensemble forecast by averaging multiple sources."""
+        """Get ensemble forecast by averaging multiple sources.
+
+        Priority order:
+        1. NWS (National Weather Service) - likely Kalshi's resolution source
+        2. WeatherAPI - commercial, high quality
+        3. OpenWeather - fallback
+
+        For US locations, NWS is weighted more heavily as it's the official source.
+        """
         forecasts = []
 
-        # Try OpenWeather
-        ow_forecast = self._get_openweather_forecast(location, date)
-        if ow_forecast:
-            forecasts.append(ow_forecast)
+        # Try NWS first (US locations) - this is likely what Kalshi uses
+        # NWS is free and doesn't require API key
+        nws_forecast = self._get_noaa_forecast(location, date)
+        if nws_forecast:
+            forecasts.append(nws_forecast)
+            # For US locations with NWS data, we can return early with high confidence
+            # or continue to get ensemble for comparison
 
         # Try WeatherAPI if available
         if self.config.weatherapi_key:
@@ -56,14 +67,19 @@ class WeatherConnector:
             if wa_forecast:
                 forecasts.append(wa_forecast)
 
-        # Try NOAA if available (US locations only)
-        if self.config.noaa_api_key:
-            noaa_forecast = self._get_noaa_forecast(location, date)
-            if noaa_forecast:
-                forecasts.append(noaa_forecast)
+        # Try OpenWeather as fallback
+        if self.config.openweather_api_key:
+            ow_forecast = self._get_openweather_forecast(location, date)
+            if ow_forecast:
+                forecasts.append(ow_forecast)
 
         if not forecasts:
             return None
+
+        # If we have NWS data, weight it more heavily in ensemble
+        # since it's likely Kalshi's resolution source
+        if nws_forecast and len(forecasts) > 1:
+            return self._weighted_ensemble_average(forecasts, location, date, nws_weight=2.0)
 
         # Average the forecasts
         return self._ensemble_average(forecasts, location, date)
@@ -185,12 +201,125 @@ class WeatherConnector:
             print(f"Error fetching WeatherAPI forecast: {e}")
             return None
 
+    # City coordinates for NWS API (major US cities that Kalshi covers)
+    CITY_COORDINATES = {
+        "new york": (40.7128, -74.0060),
+        "nyc": (40.7128, -74.0060),
+        "los angeles": (34.0522, -118.2437),
+        "la": (34.0522, -118.2437),
+        "chicago": (41.8781, -87.6298),
+        "miami": (25.7617, -80.1918),
+        "denver": (39.7392, -104.9903),
+        "seattle": (47.6062, -122.3321),
+        "san francisco": (37.7749, -122.4194),
+        "sf": (37.7749, -122.4194),
+        "phoenix": (33.4484, -112.0740),
+        "atlanta": (33.7490, -84.3880),
+        "boston": (42.3601, -71.0589),
+        "dallas": (32.7767, -96.7970),
+        "houston": (29.7604, -95.3698),
+        "philadelphia": (39.9526, -75.1652),
+    }
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _get_noaa_forecast(self, location: str, date: datetime) -> Optional[WeatherForecast]:
-        """Get forecast from NOAA (US only)."""
-        # NOAA API is more complex and requires specific grid points
-        # This is a simplified placeholder
-        # TODO: Implement full NOAA integration for US locations
-        return None
+        """Get forecast from NWS (National Weather Service) API.
+
+        This is the official US government weather source, likely used by Kalshi
+        for market resolution. No API key required.
+
+        API docs: https://www.weather.gov/documentation/services-web-api
+        """
+        try:
+            # Get coordinates for the location
+            location_lower = location.lower()
+            coords = self.CITY_COORDINATES.get(location_lower)
+
+            if not coords:
+                # Try partial match
+                for city, coord in self.CITY_COORDINATES.items():
+                    if city in location_lower or location_lower in city:
+                        coords = coord
+                        break
+
+            if not coords:
+                print(f"NWS: No coordinates for location: {location}")
+                return None
+
+            lat, lon = coords
+
+            # Step 1: Get the grid point for this location
+            points_url = f"https://api.weather.gov/points/{lat},{lon}"
+            headers = {
+                "User-Agent": "(polymarket-weather-bot, contact@example.com)",
+                "Accept": "application/geo+json"
+            }
+
+            points_response = httpx.get(points_url, headers=headers, timeout=10.0)
+            if points_response.status_code != 200:
+                print(f"NWS points failed: {points_response.status_code}")
+                return None
+
+            points_data = points_response.json()
+            forecast_url = points_data["properties"]["forecast"]
+
+            # Step 2: Get the forecast
+            forecast_response = httpx.get(forecast_url, headers=headers, timeout=10.0)
+            if forecast_response.status_code != 200:
+                print(f"NWS forecast failed: {forecast_response.status_code}")
+                return None
+
+            forecast_data = forecast_response.json()
+
+            # Step 3: Find the forecast period for the target date
+            target_date_str = date.strftime("%Y-%m-%d")
+            periods = forecast_data["properties"]["periods"]
+
+            # NWS returns periods like "Today", "Tonight", "Monday", etc.
+            # We need to find the daytime period for our target date
+            day_high = None
+            night_low = None
+            conditions = None
+
+            for period in periods:
+                # Parse the start time to get the date
+                start_time = period.get("startTime", "")
+                if target_date_str in start_time:
+                    temp = period.get("temperature")
+                    if period.get("isDaytime", True):
+                        day_high = temp
+                        conditions = period.get("shortForecast", "")
+                    else:
+                        night_low = temp
+
+                    # If we have both, we're done
+                    if day_high is not None and night_low is not None:
+                        break
+
+            if day_high is None:
+                print(f"NWS: No forecast found for {target_date_str}")
+                return None
+
+            # NWS returns temperatures in Fahrenheit
+            temp_high_f = float(day_high)
+            temp_low_f = float(night_low) if night_low else temp_high_f - 15
+
+            return WeatherForecast(
+                location=location,
+                date=date,
+                temp_high_f=temp_high_f,
+                temp_low_f=temp_low_f,
+                temp_high_c=(temp_high_f - 32) * 5 / 9,
+                temp_low_c=(temp_low_f - 32) * 5 / 9,
+                prob_precipitation=None,  # NWS uses probability phrases, not percentages
+                conditions=conditions,
+                source="NWS",
+                confidence=0.90,  # Higher confidence - official source
+            )
+
+        except Exception as e:
+            print(f"Error fetching NWS forecast: {e}")
+            return None
 
     def _find_closest_forecast(
         self, forecast_list: List[Dict], target_date: datetime
@@ -247,6 +376,58 @@ class WeatherConnector:
             conditions=forecasts[0].conditions,  # Take from first source
             source=f"Ensemble({len(forecasts)})",
             confidence=min(max_confidence + 0.1, 1.0),  # Ensemble bonus
+        )
+
+    def _weighted_ensemble_average(
+        self, forecasts: List[WeatherForecast], location: str, date: datetime,
+        nws_weight: float = 2.0
+    ) -> WeatherForecast:
+        """Weighted average with NWS data weighted more heavily.
+
+        NWS is the official US government source and likely what Kalshi uses
+        for market resolution, so we weight it more heavily.
+        """
+        if len(forecasts) == 1:
+            return forecasts[0]
+
+        # Build weights (NWS gets higher weight)
+        weights = []
+        for f in forecasts:
+            if f.source == "NWS":
+                weights.append(nws_weight)
+            else:
+                weights.append(1.0)
+
+        total_weight = sum(weights)
+
+        # Weighted average temperature predictions
+        high_temps = [(f.temp_high_f, w) for f, w in zip(forecasts, weights) if f.temp_high_f]
+        low_temps = [(f.temp_low_f, w) for f, w in zip(forecasts, weights) if f.temp_low_f]
+
+        avg_temp_high_f = sum(t * w for t, w in high_temps) / sum(w for _, w in high_temps)
+        avg_temp_low_f = sum(t * w for t, w in low_temps) / sum(w for _, w in low_temps)
+
+        avg_temp_high_c = (avg_temp_high_f - 32) * 5 / 9
+        avg_temp_low_c = (avg_temp_low_f - 32) * 5 / 9
+
+        # Average precipitation probability (unweighted, many sources don't have it)
+        precip_forecasts = [f.prob_precipitation for f in forecasts if f.prob_precipitation]
+        avg_precip = sum(precip_forecasts) / len(precip_forecasts) if precip_forecasts else None
+
+        # Use highest confidence
+        max_confidence = max(f.confidence for f in forecasts)
+
+        return WeatherForecast(
+            location=location,
+            date=date,
+            temp_high_f=avg_temp_high_f,
+            temp_low_f=avg_temp_low_f,
+            temp_high_c=avg_temp_high_c,
+            temp_low_c=avg_temp_low_c,
+            prob_precipitation=avg_precip,
+            conditions=forecasts[0].conditions,  # Take from first source (NWS)
+            source=f"WeightedEnsemble({len(forecasts)},NWS={nws_weight}x)",
+            confidence=min(max_confidence + 0.1, 1.0),
         )
 
     def calculate_probability(
@@ -431,10 +612,10 @@ class WeatherConnector:
             result["threshold_type"] = "high_temp_f"  # default
 
         # Extract temperature - check for RANGE first (Kalshi format)
-        # Patterns: "48-49°", "56° to 57°", "48 to 49°"
+        # Patterns: "48-49°", "56° to 57°", "48 to 49°", "-1-0°" (negative temps)
         range_patterns = [
-            r"(\d+)-(\d+)°",  # 48-49°
-            r"(\d+)°?\s*to\s*(\d+)°",  # 56° to 57° or 56 to 57°
+            r"(-?\d+)-(-?\d+)°",  # 48-49° or -1-0° (supports negative temps)
+            r"(-?\d+)°?\s*to\s*(-?\d+)°",  # 56° to 57° or -5° to -3°
         ]
 
         for pattern in range_patterns:
@@ -449,13 +630,13 @@ class WeatherConnector:
         # If no range found, check for threshold (>, <, above, below)
         if not result["is_range"]:
             threshold_patterns = [
-                (r">\s*(\d+)°?", "above"),  # >13°
-                (r"<\s*(\d+)°?", "below"),  # <13°
-                (r"above\s+(\d+)", "above"),  # above 70
-                (r"below\s+(\d+)", "below"),  # below 70
-                (r"exceed\s+(\d+)", "above"),  # exceed 70
-                (r"(\d+)\s*°?[fF]", None),  # 70F or 70°F (generic)
-                (r"(\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
+                (r">\s*(-?\d+)°?", "above"),  # >13° or >-5°
+                (r"<\s*(-?\d+)°?", "below"),  # <13° or <-1°
+                (r"above\s+(-?\d+)", "above"),  # above 70 or above -10
+                (r"below\s+(-?\d+)", "below"),  # below 70 or below -5
+                (r"exceed\s+(-?\d+)", "above"),  # exceed 70
+                (r"(-?\d+)\s*°?[fF]", None),  # 70F or -5°F (generic)
+                (r"(-?\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
             ]
 
             for pattern, direction in threshold_patterns:

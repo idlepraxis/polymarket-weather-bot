@@ -47,20 +47,20 @@ class Config(BaseSettings):
 
     # Trading Parameters
     max_position_size_usdc: float = Field(5.0, alias="MAX_POSITION_SIZE_USDC")
-    min_edge_threshold: float = Field(0.05, alias="MIN_EDGE_THRESHOLD")
+    min_edge_threshold: float = Field(0.10, alias="MIN_EDGE_THRESHOLD")  # 10% min edge (was 5%)
     min_confidence: float = Field(0.70, alias="MIN_CONFIDENCE")
-    max_daily_trades: int = Field(50, alias="MAX_DAILY_TRADES")
-    max_open_positions: int = Field(20, alias="MAX_OPEN_POSITIONS")
+    max_daily_trades: int = Field(25, alias="MAX_DAILY_TRADES")  # Reduced from 50
+    max_open_positions: int = Field(15, alias="MAX_OPEN_POSITIONS")  # Reduced from 20
 
     # Extreme Value Strategy Parameters
-    extreme_yes_max_price: float = Field(0.15, alias="EXTREME_YES_MAX_PRICE")
-    extreme_yes_ideal_price: float = Field(0.10, alias="EXTREME_YES_IDEAL_PRICE")
-    extreme_no_min_yes_price: float = Field(0.40, alias="EXTREME_NO_MIN_YES_PRICE")
-    extreme_no_ideal_yes_price: float = Field(0.50, alias="EXTREME_NO_IDEAL_YES_PRICE")
-    # Position sizing for ~$1 average per trade
-    extreme_min_position: float = Field(0.50, alias="EXTREME_MIN_POSITION")
-    extreme_max_position: float = Field(1.00, alias="EXTREME_MAX_POSITION")
-    extreme_aggressive_max: float = Field(1.50, alias="EXTREME_AGGRESSIVE_MAX")
+    extreme_yes_max_price: float = Field(0.12, alias="EXTREME_YES_MAX_PRICE")  # Tighter: was 0.15
+    extreme_yes_ideal_price: float = Field(0.08, alias="EXTREME_YES_IDEAL_PRICE")  # Tighter: was 0.10
+    extreme_no_min_yes_price: float = Field(0.50, alias="EXTREME_NO_MIN_YES_PRICE")  # Stricter: was 0.40
+    extreme_no_ideal_yes_price: float = Field(0.60, alias="EXTREME_NO_IDEAL_YES_PRICE")  # Stricter: was 0.50
+    # Position sizing - larger positions since fewer trades (~$2.50 average)
+    extreme_min_position: float = Field(1.50, alias="EXTREME_MIN_POSITION")  # Was 0.50
+    extreme_max_position: float = Field(2.50, alias="EXTREME_MAX_POSITION")  # Was 1.00
+    extreme_aggressive_max: float = Field(5.00, alias="EXTREME_AGGRESSIVE_MAX")  # Was 1.50
 
     # Risk Management
     bankroll_usdc: float = Field(1000.0, alias="BANKROLL_USDC")
@@ -69,10 +69,10 @@ class Config(BaseSettings):
 
     # Bot Runner Configuration
     bankroll: float = Field(1000.0, alias="BANKROLL")
-    scan_interval_hours: int = Field(6, alias="SCAN_INTERVAL_HOURS")
-    max_trades_per_scan: int = Field(20, alias="MAX_TRADES_PER_SCAN")
-    max_trades_per_day: int = Field(50, alias="MAX_TRADES_PER_DAY")
-    max_trades_per_city: int = Field(3, alias="MAX_TRADES_PER_CITY")
+    scan_interval_hours: int = Field(4, alias="SCAN_INTERVAL_HOURS")  # More frequent scans
+    max_trades_per_scan: int = Field(10, alias="MAX_TRADES_PER_SCAN")  # Reduced from 20
+    max_trades_per_day: int = Field(25, alias="MAX_TRADES_PER_DAY")  # Reduced from 50
+    max_trades_per_city: int = Field(2, alias="MAX_TRADES_PER_CITY")  # Reduced from 3
     max_daily_exposure_pct: float = Field(5.0, alias="MAX_DAILY_EXPOSURE_PCT")
     resolution_check_hours: int = Field(1, alias="RESOLUTION_CHECK_HOURS")
 
