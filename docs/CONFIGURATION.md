@@ -78,9 +78,12 @@ KALSHI_API_PRIVATE_KEY=your_private_key
 BANKROLL=1000.0                       # How much money to trade with
 
 # Weather API - AT LEAST ONE REQUIRED (free tiers available)
+# NWS is used automatically (no key required) as primary source
 OPENWEATHER_API_KEY=your_key          # https://openweathermap.org/api
 # OR
 WEATHERAPI_KEY=your_key               # https://www.weatherapi.com/
+# Optional: NOAA for additional data
+NOAA_API_KEY=your_key                 # https://www.ncdc.noaa.gov/cdo-web/
 ```
 
 > ⚠️ **CRITICAL**: Without a weather API key, the bot cannot calculate real probabilities and will skip all trades. The strategy requires actual weather forecasts to identify mispricings.
@@ -88,15 +91,15 @@ WEATHERAPI_KEY=your_key               # https://www.weatherapi.com/
 ### ⚙️ RECOMMENDED (Should set these, but have defaults)
 
 ```bash
-# Position sizing
-EXTREME_MIN_POSITION=0.50             # Default: 0.50
-EXTREME_MAX_POSITION=1.00             # Default: 1.00
-EXTREME_AGGRESSIVE_MAX=1.50           # Default: 1.50
+# Position sizing (increased in v2.4.0 for fewer, larger trades)
+EXTREME_MIN_POSITION=1.50             # Default: 1.50 (was 0.50)
+EXTREME_MAX_POSITION=2.50             # Default: 2.50 (was 1.00)
+EXTREME_AGGRESSIVE_MAX=5.00           # Default: 5.00 (was 1.50)
 
-# Trading frequency
-SCAN_INTERVAL_HOURS=6                 # Default: 6
-MAX_TRADES_PER_SCAN=20                # Default: 20
-MAX_TRADES_PER_DAY=50                 # Default: 50
+# Trading frequency (reduced in v2.4.0 for quality over quantity)
+SCAN_INTERVAL_HOURS=4                 # Default: 4 (was 6)
+MAX_TRADES_PER_SCAN=10                # Default: 10 (was 20)
+MAX_TRADES_PER_DAY=25                 # Default: 25 (was 50)
 ```
 
 ### 📝 OPTIONAL (Can omit, will use defaults)
@@ -151,7 +154,10 @@ LOG_DIR=./logs                        # Default: ./logs
 | Setting | What It Does | Default |
 |---------|--------------|---------|
 | `EXTREME_YES_MAX_PRICE` | Only buy YES if price below this | 0.12 (12¢) |
-| `EXTREME_NO_MIN_YES_PRICE` | Only buy NO if YES above this | 0.60 (60¢) |
+| `EXTREME_YES_IDEAL_PRICE` | Ideal price for YES trades | 0.08 (8¢) |
+| `EXTREME_NO_MIN_YES_PRICE` | Only buy NO if YES above this | 0.50 (50¢) |
+| `EXTREME_NO_IDEAL_YES_PRICE` | Ideal YES price for NO trades | 0.60 (60¢) |
+| `MIN_EDGE_THRESHOLD` | Minimum edge required to trade | 0.10 (10%) |
 
 > **Note on NO threshold**: Buying NO when YES > 60% means NO costs < 40¢, giving a 1.5x+ payoff ratio. The old 40% threshold resulted in buying NO at 55-60¢ (terrible 0.8x payoff).
 
@@ -190,19 +196,20 @@ MAX_DAILY_EXPOSURE_PCT=3.0        # Lower exposure (3%)
 
 **Expected:** ~$0.50 avg/trade, 15-30 trades/day, $7.50-15/day exposure
 
-### Scenario 2: Recommended (Balanced)
+### Scenario 2: Recommended (Balanced) - v2.4.0 Defaults
 
 ```bash
 BANKROLL=1000.0                   # $1k bankroll
-EXTREME_MIN_POSITION=0.50         # Target $1 avg
-EXTREME_MAX_POSITION=1.00
-EXTREME_AGGRESSIVE_MAX=1.50
-MAX_TRADES_PER_DAY=50             # Standard limit
+EXTREME_MIN_POSITION=1.50         # Larger positions, fewer trades
+EXTREME_MAX_POSITION=2.50
+EXTREME_AGGRESSIVE_MAX=5.00
+MAX_TRADES_PER_DAY=25             # Quality over quantity
 MAX_DAILY_EXPOSURE_PCT=5.0        # 5% risk
-SCAN_INTERVAL_HOURS=6             # 4 scans/day
+SCAN_INTERVAL_HOURS=4             # 6 scans/day
+MIN_EDGE_THRESHOLD=0.10           # 10% minimum edge
 ```
 
-**Expected:** ~$1.00 avg/trade, 20-30 trades/day, $20-30/day exposure
+**Expected:** ~$2.50 avg/trade, 10-15 trades/day, $25-40/day exposure
 
 ### Scenario 3: Aggressive (Higher Volume)
 

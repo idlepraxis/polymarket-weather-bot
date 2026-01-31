@@ -48,17 +48,18 @@ This creates **systematic mispricings** that can be exploited.
 
 ```
 ✅ BUY YES shares when price < 10-12¢
-✅ BUY NO shares when YES price > 60¢ (NO costs < 40¢)
-✅ Position size: $0.50 - $2.50
-✅ High volume: 3-5+ trades per day
+✅ BUY NO shares when YES price > 50¢ (NO costs < 50¢)
+✅ Position size: $1.50 - $5.00 (v2.4.0)
+✅ Quality over quantity: 10-15 trades per day
 ✅ Verify with weather forecast (don't bet blind!)
-❌ Never buy YES above 15¢
-❌ Never buy NO when YES below 60¢ (bad payoff ratio)
+✅ Require 10% minimum edge before trading
+❌ Never buy YES above 12¢
+❌ Never buy NO when YES below 50¢ (insufficient payoff ratio)
 ```
 
 That's it. Weather forecasts provide the edge. Strict price discipline provides the payoff.
 
-> ⚠️ **CRITICAL**: The strategy requires a **weather API key** to calculate real probabilities. Without it, the bot cannot identify mispricings and will skip trades.
+> ⚠️ **CRITICAL**: The strategy requires weather data to calculate real probabilities. The bot uses **NWS (National Weather Service)** as the primary source (no API key required), with OpenWeatherMap and WeatherAPI.com as backups. Without weather data, the bot will skip trades.
 
 ---
 
@@ -155,15 +156,15 @@ YES ≤ 12¢:  $0.75 (good)
 YES ≤ 15¢:  $0.50 (acceptable)
 ```
 
-**NO Purchases (when YES is expensive):**
+**NO Purchases (when YES is expensive) - v2.4.0:**
 ```
-YES ≥ 75¢:  $2.50 (NO costs 25¢, 3x payoff)
-YES ≥ 70¢:  $2.00 (NO costs 30¢, 2.3x payoff)
-YES ≥ 65¢:  $1.50 (NO costs 35¢, 1.9x payoff)
-YES ≥ 60¢:  $1.00 (NO costs 40¢, 1.5x payoff)
+YES ≥ 75¢:  $5.00 (NO costs 25¢, 3x payoff)
+YES ≥ 70¢:  $3.50 (NO costs 30¢, 2.3x payoff)
+YES ≥ 60¢:  $2.50 (NO costs 40¢, 1.5x payoff)
+YES ≥ 50¢:  $1.50 (NO costs 50¢, 1x payoff - edge required!)
 ```
 
-> **Important**: Never buy NO when YES < 60%. At YES=50%, NO costs 50¢ with only 1x payoff (break even). At YES=45%, NO costs 55¢ with 0.8x payoff (losing proposition!).
+> **Important**: v2.4.0 lowered the NO threshold from 60% to 50% but requires a **10% minimum edge** from weather data. At YES=50%, NO costs 50¢ with 1x payoff - only trade if weather forecasts show the market is wrong..
 
 **Rationale:**
 - At 5¢, $1 buys 20 shares (great upside, but limit position to manage risk)
@@ -330,23 +331,30 @@ python bot.py extreme-scan --yes-max 0.20 --no-min-yes 0.35
 Add these to your `.env` file:
 
 ```bash
-# REQUIRED: Weather API (at least one)
-OPENWEATHER_API_KEY=your_key      # Get free key at openweathermap.org
-WEATHERAPI_KEY=your_key           # Alternative: weatherapi.com
+# Weather APIs (NWS is used automatically as primary source)
+OPENWEATHER_API_KEY=your_key      # Backup: openweathermap.org
+WEATHERAPI_KEY=your_key           # Backup: weatherapi.com
 
-# Extreme Value Strategy Settings
+# Edge Requirement (v2.4.0: increased from 5% to 10%)
+MIN_EDGE_THRESHOLD=0.10           # Only trade with 10%+ edge
+
+# Extreme Value Strategy Settings (v2.4.0: tighter thresholds)
 EXTREME_YES_MAX_PRICE=0.12        # Max price to buy YES (12¢)
 EXTREME_YES_IDEAL_PRICE=0.08      # Ideal YES price (8¢)
-EXTREME_NO_MIN_YES_PRICE=0.60     # Min YES price to buy NO (60¢)
-EXTREME_NO_IDEAL_YES_PRICE=0.70   # Ideal YES price for NO (70¢)
+EXTREME_NO_MIN_YES_PRICE=0.50     # Min YES price to buy NO (50¢)
+EXTREME_NO_IDEAL_YES_PRICE=0.60   # Ideal YES price for NO (60¢)
 
-# Position Sizing
-EXTREME_MIN_POSITION=0.75         # Min position size
-EXTREME_MAX_POSITION=1.50         # Standard max position
-EXTREME_AGGRESSIVE_MAX=2.50       # Max for great opportunities
+# Position Sizing (v2.4.0: larger positions, fewer trades)
+EXTREME_MIN_POSITION=1.50         # Min position size (was 0.50)
+EXTREME_MAX_POSITION=2.50         # Standard max position (was 1.00)
+EXTREME_AGGRESSIVE_MAX=5.00       # Max for great opportunities (was 1.50)
+
+# Trading Limits (v2.4.0: quality over quantity)
+MAX_TRADES_PER_DAY=25             # Daily limit (was 50)
+MAX_TRADES_PER_SCAN=10            # Per scan limit (was 20)
 ```
 
-> ⚠️ **Weather API is REQUIRED**: Without weather data, the bot cannot calculate probabilities and will not place trades.
+> **Weather Data**: The bot uses **NWS (National Weather Service)** as the primary weather source with 2x weight in the ensemble. This is the official US source and likely matches Kalshi's resolution data. OpenWeatherMap and WeatherAPI.com serve as backups.
 
 ---
 

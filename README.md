@@ -8,15 +8,16 @@
 
 ## 🎯 Strategy: Extreme Value Betting
 
-The bot uses a **high-volume, extreme value strategy** based on successful trader analysis ($25,700 profit from 1,420 trades):
+The bot uses an **extreme value strategy** based on successful trader analysis ($25,700 profit from 1,420 trades):
 
-- **Buy YES** when price < 10-15¢
-- **Buy NO** when YES > 40-50¢
-- **Small positions** (~$1 per trade)
-- **High volume** (20-30 trades/day)
+- **Buy YES** when price < 10-12¢
+- **Buy NO** when YES > 50¢
+- **Larger positions** (~$2.50 per trade)
+- **Quality over quantity** (10-15 trades/day)
+- **10% minimum edge** required from weather forecasts
 - **Asymmetric payoffs** (risk $0.10 to win $0.90)
 
-This exploits market mispricings through volume and asymmetric risk/reward ratios, not weather forecasting.
+Weather forecasts from NWS (National Weather Service) provide the edge. Strict price discipline provides the payoff.
 
 📖 **[Read Full Strategy Guide →](docs/EXTREME_VALUE_STRATEGY.md)**
 
@@ -60,14 +61,15 @@ CHAINSTACK_RPC_URL=https://polygon-mainnet.chainstacklabs.com/your_key
 OPENWEATHER_API_KEY=your_openweather_key
 ```
 
-**Bot Configuration** (optional, defaults provided):
+**Bot Configuration** (optional, v2.4.0 defaults):
 ```bash
 BANKROLL=1000.0                    # Total capital
-SCAN_INTERVAL_HOURS=6              # How often to scan for trades
-MAX_TRADES_PER_SCAN=20             # Trades per scan cycle
-MAX_TRADES_PER_DAY=50              # Daily trade limit
+SCAN_INTERVAL_HOURS=4              # How often to scan for trades
+MAX_TRADES_PER_SCAN=10             # Trades per scan cycle
+MAX_TRADES_PER_DAY=25              # Daily trade limit
+MIN_EDGE_THRESHOLD=0.10            # 10% minimum edge required
 MAX_DAILY_EXPOSURE_PCT=5.0         # Max 5% of bankroll at risk per day
-EXTREME_AGGRESSIVE_MAX=1.50        # Max position size ($1.50)
+EXTREME_AGGRESSIVE_MAX=5.00        # Max position size ($5.00)
 ```
 
 ### 3. Start the Bot
@@ -82,8 +84,10 @@ python bot.py bot-start --simulation --platform kalshi
 ```
 
 The bot will:
-- Scan for opportunities every 6 hours
-- Execute up to 20 trades per scan
+- Scan for opportunities every 4 hours
+- Execute up to 10 trades per scan (quality over quantity)
+- Require 10% minimum edge from weather forecasts
+- Use NWS as primary weather data source
 - Check for resolutions every hour
 - Track all trades in SQLite database
 
@@ -353,12 +357,13 @@ Based on how cheap the opportunity is:
 
 **Average: ~$1.00 per trade**
 
-### 4. Risk Management
+### 4. Risk Management (v2.4.0)
 
+- **Edge Requirement:** 10% minimum edge from weather forecasts
 - **Daily Exposure:** Max 5% of bankroll ($50 on $1,000)
-- **Position Limit:** Max $1.50 per trade
-- **Trade Limit:** Max 50 trades/day
-- **City Diversification:** Max 3 trades per city
+- **Position Limit:** $1.50-$5.00 per trade (larger, fewer trades)
+- **Trade Limit:** Max 25 trades/day (was 50)
+- **City Diversification:** Max 2 trades per city (was 3)
 - **Resolution Time:** Only markets closing within 7 days
 
 ---
@@ -581,30 +586,33 @@ logs/
 
 ## 🔧 Configuration Reference
 
-### Trading Strategy Parameters
+### Trading Strategy Parameters (v2.4.0)
 
 ```bash
-# Position Sizing (target ~$1 avg per trade)
-EXTREME_MIN_POSITION=0.50           # Minimum bet
-EXTREME_MAX_POSITION=1.00           # Standard bet
-EXTREME_AGGRESSIVE_MAX=1.50         # Maximum bet
+# Edge Requirement
+MIN_EDGE_THRESHOLD=0.10             # 10% minimum edge required
 
-# Entry Thresholds
-EXTREME_YES_MAX_PRICE=0.15          # Buy YES if < 15¢
-EXTREME_YES_IDEAL_PRICE=0.10        # Ideal YES price: 10¢
-EXTREME_NO_MIN_YES_PRICE=0.40       # Buy NO if YES > 40¢
-EXTREME_NO_IDEAL_YES_PRICE=0.50     # Ideal NO entry: YES @ 50¢
+# Position Sizing (larger positions, fewer trades)
+EXTREME_MIN_POSITION=1.50           # Minimum bet (was 0.50)
+EXTREME_MAX_POSITION=2.50           # Standard bet (was 1.00)
+EXTREME_AGGRESSIVE_MAX=5.00         # Maximum bet (was 1.50)
+
+# Entry Thresholds (tighter)
+EXTREME_YES_MAX_PRICE=0.12          # Buy YES if < 12¢ (was 0.15)
+EXTREME_YES_IDEAL_PRICE=0.08        # Ideal YES price: 8¢ (was 0.10)
+EXTREME_NO_MIN_YES_PRICE=0.50       # Buy NO if YES > 50¢ (was 0.40)
+EXTREME_NO_IDEAL_YES_PRICE=0.60     # Ideal NO entry: YES @ 60¢ (was 0.50)
 ```
 
-### Bot Runner Configuration
+### Bot Runner Configuration (v2.4.0)
 
 ```bash
-# Scanning & Trading
+# Scanning & Trading (quality over quantity)
 BANKROLL=1000.0                     # Total capital
-SCAN_INTERVAL_HOURS=6               # Scan every 6 hours
-MAX_TRADES_PER_SCAN=20              # Trades per scan
-MAX_TRADES_PER_DAY=50               # Daily limit
-MAX_TRADES_PER_CITY=3               # City diversification
+SCAN_INTERVAL_HOURS=4               # Scan every 4 hours (was 6)
+MAX_TRADES_PER_SCAN=10              # Trades per scan (was 20)
+MAX_TRADES_PER_DAY=25               # Daily limit (was 50)
+MAX_TRADES_PER_CITY=2               # City diversification (was 3)
 
 # Risk Management
 MAX_DAILY_EXPOSURE_PCT=5.0          # Max 5% daily exposure
@@ -736,34 +744,47 @@ git pull origin main  # or your current branch
 
 ## 🆕 Recent Improvements (January 2026)
 
-### Duplicate Trade Prevention
-The bot now tracks open positions and prevents duplicate trades on the same markets across multiple scans. This ensures each market is only traded once until it resolves.
+### v2.4.0 - Critical Trading Fixes (January 31, 2026)
 
-### Location Injection in Questions
-Market questions now include city names extracted from ticker codes:
-- **Before:** "Will the minimum temperature be 15-16° on Jan 27, 2026?"
-- **After:** "Will the minimum temperature in Denver be 15-16° on Jan 27, 2026?"
+**NWS API Integration:**
+- Added National Weather Service as primary weather data source
+- Weighted ensemble with 2x weight for NWS (official US source)
+- Better alignment with Kalshi's likely resolution data source
 
-### Dual-Mode Resolution Checking
-- **Simulation Mode:** Queries finalized markets via Kalshi markets API
-- **Live Mode:** Uses Kalshi settlements API for real position settlements
-- Ensures proper resolution tracking for both simulation and live trading
+**Quality Over Quantity:**
+- Increased min_edge_threshold from 5% to 10%
+- Reduced max_trades_per_day from 50 to 25
+- Increased position sizes ($1.50-$5.00 per trade)
+- Removed fallback heuristics - only trades with real weather data
 
-### Enhanced Logging
-- Fixed file logging to ensure all bot activity is captured in `logs/bot.log`
-- All modules now properly initialize with file logging enabled
-- Easier debugging and monitoring of bot operations
+**Critical Bug Fixes:**
+- Fixed threshold direction in probability calculation (was inverting probabilities)
+- Fixed negative temperature parsing (e.g., `<-1°`, `-1-0°`)
+- Fixed zero threshold being treated as missing
 
-### UI Improvements
-- Wider Market column (60 chars) to show full temperature ranges
-- YES/NO side display instead of just "BUY"
-- Better status table formatting
+### v2.3.0 - Kalshi Parser Fixes (January 29, 2026)
+
+- Properly parses Kalshi-specific question formats
+- Range probability calculation for bucket-style markets
+- Weather API integration for real forecast-based probabilities
+
+### v2.2.0 - Core Fixes (January 26, 2026)
+
+**Duplicate Trade Prevention:**
+- Tracks open positions and prevents duplicate trades across scans
+
+**Dual-Mode Resolution Checking:**
+- Simulation mode queries finalized markets via Kalshi markets API
+- Live mode uses Kalshi settlements API for real position settlements
+
+**Location Injection:**
+- Market questions now include city names from ticker codes
 
 ---
 
 ## 📝 Development Status
 
-### ✅ Implemented (v2.2 - January 2026)
+### ✅ Implemented (v2.4 - January 2026)
 - [x] Multi-platform support (Kalshi + Polymarket)
 - [x] Automated bot runner with daemon mode
 - [x] P&L tracking with SQLite database
