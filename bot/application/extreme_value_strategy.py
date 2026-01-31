@@ -1,13 +1,14 @@
-"""Extreme value betting strategy - based on successful trader analysis.
+"""Extreme value betting strategy - forecast-driven approach.
 
 Strategy:
-- Buy YES shares ONLY when price < 0.10-0.15 (10-15¢)
-- Buy NO shares ONLY when YES price > 0.40-0.50 (implying NO is cheap)
-- Keep position sizes very small (<$1 typically, max $5)
-- High volume (many bets per day)
-- Let extreme mispricings and asymmetric payoffs drive profits
+- Buy YES shares ONLY when price < 0.10-0.15 (10-15¢) AND forecast shows edge
+- Buy NO shares ONLY when YES price > 0.40-0.50 AND forecast shows edge
+- CRITICAL: Only trade when weather forecast provides minimum edge threshold
+- No fallback heuristics - actual forecast data required for every trade
+- Keep position sizes small (~$2.50 per trade)
+- Quality over quantity - fewer trades with real edge
 
-This exploits market microstructure inefficiencies in low-liquidity weather markets.
+This combines price-based opportunity detection with forecast-based edge validation.
 """
 
 from datetime import datetime
@@ -101,12 +102,15 @@ class ExtremeValueStrategy:
         # Calculate edge
         edge = fair_prob - yes_price
 
-        # Must have positive expected value even with conservative estimate
-        if edge <= 0:
-            # Even without forecast, extreme prices often have edge
-            # Use base assumption: if market says 8%, reality is probably 15-25%
-            fair_prob = max(yes_price * 2.5, 0.20)  # At least 2.5x market price or 20%
-            edge = fair_prob - yes_price
+        # STRICT: Only trade with real forecast-based edge
+        # No fallback heuristics - we need actual weather data to have edge
+        min_edge = getattr(self.config, "min_edge_threshold", 0.10)
+        if edge < min_edge:
+            self.logger.debug(
+                f"SKIP {market.market_id}: Edge {edge:.1%} < min {min_edge:.1%} "
+                f"(fair={fair_prob:.1%}, market={yes_price:.1%})"
+            )
+            return None
 
         reasoning = (
             f"EXTREME VALUE: YES at {yes_price:.1%} (threshold: {self.yes_max_price:.1%}). "
@@ -155,11 +159,15 @@ class ExtremeValueStrategy:
         # Edge for NO shares
         edge = fair_prob_no - no_price
 
-        if edge <= 0:
-            # Conservative estimate: if market says YES is 60%, reality is probably 40-50%
-            fair_prob_yes = min(yes_price * 0.75, 0.50)
-            fair_prob_no = 1 - fair_prob_yes
-            edge = fair_prob_no - no_price
+        # STRICT: Only trade with real forecast-based edge
+        # No fallback heuristics - we need actual weather data to have edge
+        min_edge = getattr(self.config, "min_edge_threshold", 0.10)
+        if edge < min_edge:
+            self.logger.debug(
+                f"SKIP {market.market_id}: NO edge {edge:.1%} < min {min_edge:.1%} "
+                f"(fair_no={fair_prob_no:.1%}, market_no={no_price:.1%})"
+            )
+            return None
 
         reasoning = (
             f"EXTREME VALUE: YES overpriced at {yes_price:.1%}, buying NO at {no_price:.1%}. "
