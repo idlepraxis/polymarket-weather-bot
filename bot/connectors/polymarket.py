@@ -121,17 +121,29 @@ class PolymarketClient:
         balance_usdc = balance_wei / 1e6
         return balance_usdc
 
-    def get_market(self, id) -> Dict[str, Any]:
+    def get_market(self, id) -> Optional[Dict[str, Any]]:
+        """Fetch a single market by ID from Gamma API.
 
-        response = httpx.get(
-            f"{self.config.gamma_api_url}/market/{id}",
-            timeout=30.0,
-        )
+        Args:
+            id: The market ID to fetch
 
-        if response.status_code != 200:
-          print(f"Error fetching markets: {response.status_code}")
+        Returns:
+            Market data dict or None if not found/error
+        """
+        try:
+            response = httpx.get(
+                f"{self.config.gamma_api_url}/market/{id}",
+                timeout=30.0,
+            )
 
-        return response.json()
+            if response.status_code != 200:
+                print(f"Error fetching market {id}: {response.status_code}")
+                return None
+
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching market {id}: {e}")
+            return None
 
     def get_all_markets(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Fetch all active markets from Gamma API."""
