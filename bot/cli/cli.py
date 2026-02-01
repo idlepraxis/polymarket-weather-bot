@@ -1261,6 +1261,68 @@ def analyze_wallet(
         raise typer.Exit(1)
 
 
+@app.command(name="check-resolutions")
+def check_resolutions(
+    platform: str = typer.Option("kalshi", help="Platform: polymarket or kalshi"),
+    simulation: bool = typer.Option(True, "--simulation/--live", help="Check simulation or live trades"),
+):
+    """Manually check and update resolutions for open trades.
+
+    This command checks all open trades against the platform API to see
+    if any markets have been resolved, and updates P&L accordingly.
+    """
+    try:
+        mode = "SIMULATION" if simulation else "LIVE"
+        mode_color = "yellow" if simulation else "green"
+
+        console.print(f"\n[{mode_color} bold]Checking Resolutions - {mode} Mode ({platform.upper()})[/{mode_color} bold]\n")
+
+        # Get open trades first to show what we're checking
+        trade_db = TradeHistoryDB()
+        open_trades = trade_db.get_open_trades(simulation=simulation, platform=platform)
+
+        if not open_trades:
+            console.print("[yellow]No open trades to check[/yellow]")
+            return
+
+        console.print(f"Found [cyan]{len(open_trades)}[/cyan] open trades to check\n")
+
+        # Show trades being checked
+        for trade in open_trades[:10]:  # Show first 10
+            console.print(f"  • {trade['market_id']}: {trade['question'][:50]}...")
+
+        if len(open_trades) > 10:
+            console.print(f"  ... and {len(open_trades) - 10} more\n")
+
+        # Initialize bot runner and run resolution check
+        with console.status("[bold green]Checking market resolutions..."):
+            bot = BotRunner(platform=platform, simulation=simulation)
+            bot._check_resolutions()
+
+        # Get updated stats
+        open_trades_after = trade_db.get_open_trades(simulation=simulation, platform=platform)
+        resolved_count = len(open_trades) - len(open_trades_after)
+
+        if resolved_count > 0:
+            console.print(f"\n[green]✓ Resolved {resolved_count} trades![/green]")
+
+            # Show P&L summary
+            pnl_stats = trade_db.get_pnl_summary(simulation=simulation, platform=platform)
+            pnl_color = "green" if pnl_stats['realized_pnl'] >= 0 else "red"
+            console.print(f"\nUpdated P&L: [{pnl_color}]${pnl_stats['realized_pnl']:.2f}[/{pnl_color}]")
+            console.print(f"Win Rate: {pnl_stats['win_rate']:.1f}%")
+        else:
+            console.print("\n[yellow]No new resolutions found[/yellow]")
+
+        console.print(f"\nRemaining open trades: {len(open_trades_after)}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}", markup=False)
+        import traceback
+        console.print(traceback.format_exc(), markup=False)
+        raise typer.Exit(1)
+
+
 @app.command(name="test-resolution")
 def test_resolution(
     ticker: str = typer.Option(None, help="Specific ticker to test (optional)"),
