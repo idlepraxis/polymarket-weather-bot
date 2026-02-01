@@ -132,7 +132,7 @@ class PolymarketClient:
         """
         try:
             response = httpx.get(
-                f"{self.config.gamma_api_url}/market/{id}",
+                f"{self.config.gamma_api_url}/markets/{id}",
                 timeout=30.0,
             )
 
