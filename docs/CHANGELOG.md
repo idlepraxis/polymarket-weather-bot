@@ -5,6 +5,77 @@ All notable changes to the Polymarket Weather Bot will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-31
+
+### Added
+- **NWS (National Weather Service) API integration**: Primary weather data source
+  - Official US government weather source, likely matches Kalshi's resolution data
+  - Weighted ensemble with 2x weight for NWS over other sources
+  - Falls back to OpenWeatherMap and WeatherAPI.com when NWS unavailable
+- **Negative temperature support**: Parser now handles sub-zero markets
+  - Regex patterns updated to match `-?\d+` for temps like `<-1°` and `-1-0°`
+  - Added comprehensive tests for negative threshold and range markets
+
+### Fixed
+- **CRITICAL**: Threshold direction ignored in probability calculation
+  - `calculate_probability()` always calculated P(temp > threshold)
+  - For `<49°` markets, this meant betting with inverted probabilities
+  - Added `direction` parameter: `"above"` or `"below"`
+  - This bug caused near 100% loss rate on threshold markets
+- **CRITICAL**: Fallback heuristic assumed edge without data
+  - Old behavior: Assumed 2.5x edge when no weather forecast available
+  - New behavior: Only trades when real weather data provides actual edge
+  - Audit showed 4.8% win rate (1/21) partly due to this flaw
+- **CRITICAL**: Zero threshold treated as missing
+  - Python's `not 0.0` evaluates to `True`, causing `<0°` markets to be skipped
+  - Changed to explicit `is None` check for threshold validation
+
+### Changed
+- **Increased min_edge_threshold**: 5% → 10%
+  - Higher quality trades only, reduces noise
+- **Reduced trading volume**:
+  - `max_trades_per_day`: 50 → 25
+  - `max_trades_per_scan`: 20 → 10
+  - `max_trades_per_city`: 3 → 2
+- **Increased position sizes** (compensate for fewer trades):
+  - `extreme_min_position`: $0.50 → $1.50
+  - `extreme_max_position`: $1.00 → $2.50
+  - `extreme_aggressive_max`: $1.50 → $5.00
+- **Tighter price thresholds**:
+  - `extreme_yes_max_price`: 0.15 → 0.12
+  - `extreme_yes_ideal_price`: 0.10 → 0.08
+  - `extreme_no_min_yes_price`: 0.40 → 0.50
+  - `extreme_no_ideal_yes_price`: 0.50 → 0.60
+- **More frequent scans**: `scan_interval_hours`: 6 → 4
+
+### Technical Details
+
+#### Files Modified
+- `bot/connectors/weather.py`:
+  - Added NWS API client with weighted ensemble averaging
+  - Updated regex patterns for negative temperature parsing
+  - Added `direction` parameter to `calculate_probability()`
+- `bot/application/extreme_value_strategy.py`:
+  - Removed fallback heuristic probability estimation
+  - Pass `threshold_direction` to probability calculation
+  - Fixed zero threshold check (`is None` instead of truthiness)
+- `bot/utils/config.py`:
+  - Updated all trading parameter defaults
+  - Added `NOAA_API_KEY` configuration option
+
+#### Configuration Changes
+| Parameter | Old Value | New Value |
+|-----------|-----------|-----------|
+| `MIN_EDGE_THRESHOLD` | 0.05 | 0.10 |
+| `MAX_TRADES_PER_DAY` | 50 | 25 |
+| `MAX_TRADES_PER_SCAN` | 20 | 10 |
+| `EXTREME_MIN_POSITION` | 0.50 | 1.50 |
+| `EXTREME_MAX_POSITION` | 1.00 | 2.50 |
+| `EXTREME_YES_MAX_PRICE` | 0.15 | 0.12 |
+| `EXTREME_NO_MIN_YES_PRICE` | 0.40 | 0.50 |
+
+---
+
 ## [2.3.0] - 2026-01-29
 
 ### Added
@@ -179,6 +250,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Upgrade Guide
+
+### Upgrading from v2.3.x to v2.4.0
+
+1. **Pull latest changes:**
+   ```bash
+   git pull origin main
+   ```
+
+2. **Review new configuration defaults** (optional - bot uses better defaults automatically):
+   ```bash
+   # If you want to customize, update .env:
+   MIN_EDGE_THRESHOLD=0.10           # Now 10% (was 5%)
+   MAX_TRADES_PER_DAY=25             # Reduced from 50
+   EXTREME_MIN_POSITION=1.50         # Larger positions
+   EXTREME_MAX_POSITION=2.50
+   ```
+
+3. **NWS API is automatic** - No configuration needed. The bot now uses the National Weather Service as the primary data source.
+
+4. **Restart bot to apply fixes:**
+   ```bash
+   # Stop current bot (Ctrl+C in tmux)
+   # Restart with new version
+   python bot.py bot-start --simulation --platform kalshi
+   ```
+
+5. **Verify improvements:**
+   - Check logs for "NWS" mentions confirming the new weather source
+   - Monitor trade quality: Should see fewer but higher-edge trades
+   - Look for correct probability direction in logs (e.g., "P(temp < 49) = 0.23")
+
+### Breaking Changes
+
+**None** - v2.4.0 is fully backward compatible.
+
+However, **behavior changes significantly**:
+- Fewer trades per day (quality over quantity)
+- Larger position sizes per trade
+- Stricter edge requirements (10% minimum)
+- No trades without real weather data (removed fallback heuristics)
+
+If you were relying on high trade volume, you may want to adjust `MAX_TRADES_PER_DAY` and position sizing in your `.env`.
+
+---
 
 ### Upgrading from v2.1.x to v2.2.0
 
