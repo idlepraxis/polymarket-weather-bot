@@ -615,9 +615,83 @@ class BotRunner:
         return None
 
     def _get_polymarket_status(self, market_id: str) -> Optional[Dict[str, Any]]:
-        """Get market status from Polymarket."""
-        # TODO: Implement Polymarket resolution checking
-        return None
+        """Get market status from Polymarket.
+
+        Returns:
+            Dict with 'resolved' (bool) and 'outcome' ('yes' or 'no') if resolved,
+            or None if market not found.
+        """
+        try:
+            market = self.client.get_market(market_id)
+
+            if not market:
+                return None
+
+            # Check if market is resolved
+            # Gamma API uses 'closed' and may have 'resolved' field
+            is_closed = market.get('closed', False)
+            is_resolved = market.get('resolved', False)
+
+            # Market must be both closed and resolved
+            if not (is_closed or is_resolved):
+                return {'resolved': False, 'outcome': None}
+
+            # Determine outcome from outcomePrices
+            # After resolution, winning outcome has price "1" (or close to it)
+            outcome_prices = market.get('outcomePrices', [])
+            outcomes = market.get('outcomes', ['Yes', 'No'])
+
+            if not outcome_prices or len(outcome_prices) < 2:
+                # Try to get from CLOB client as fallback
+                condition_id = market.get('conditionId')
+                if condition_id:
+                    try:
+                        clob_market = self.client.clob_client.get_market(condition_id)
+                        if clob_market:
+                            # CLOB client returns different format
+                            is_resolved = clob_market.get('closed', False)
+                            if is_resolved:
+                                # Check tokens for winner
+                                tokens = clob_market.get('tokens', [])
+                                for token in tokens:
+                                    if float(token.get('price', 0)) >= 0.99:
+                                        winning_outcome = token.get('outcome', '').lower()
+                                        return {'resolved': True, 'outcome': winning_outcome}
+                    except Exception as e:
+                        self.logger.debug(f"CLOB fallback failed for {market_id}: {e}")
+
+                return {'resolved': is_closed, 'outcome': None}
+
+            # Find winning outcome (price closest to 1.0)
+            winning_idx = 0
+            max_price = 0.0
+            for idx, price_str in enumerate(outcome_prices):
+                try:
+                    price = float(price_str)
+                    if price > max_price:
+                        max_price = price
+                        winning_idx = idx
+                except (ValueError, TypeError):
+                    continue
+
+            # Only consider resolved if winning price is clearly 1.0 (or very close)
+            if max_price < 0.99:
+                return {'resolved': False, 'outcome': None}
+
+            # Map outcome index to 'yes' or 'no'
+            if winning_idx < len(outcomes):
+                winning_outcome = outcomes[winning_idx].lower()
+            else:
+                winning_outcome = 'yes' if winning_idx == 0 else 'no'
+
+            return {
+                'resolved': True,
+                'outcome': winning_outcome
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error getting Polymarket status for {market_id}: {e}")
+            return None
 
     def _calculate_trade_outcome(self, trade: Dict, market_info: Dict) -> bool:
         """Determine if trade won based on outcome."""

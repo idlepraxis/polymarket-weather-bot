@@ -121,6 +121,18 @@ class PolymarketClient:
         balance_usdc = balance_wei / 1e6
         return balance_usdc
 
+    def get_market(self, id) -> Dict[str, Any]:
+
+        response = httpx.get(
+            f"{self.config.gamma_api_url}/market/{id}",
+            timeout=30.0,
+        )
+
+        if response.status_code != 200:
+          print(f"Error fetching markets: {response.status_code}")
+
+        return response.json()
+
     def get_all_markets(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Fetch all active markets from Gamma API."""
         all_markets = []
