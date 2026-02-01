@@ -1263,7 +1263,7 @@ def analyze_wallet(
 
 @app.command(name="check-resolutions")
 def check_resolutions(
-    platform: str = typer.Option("kalshi", help="Platform: polymarket or kalshi"),
+    platform: str = typer.Option("polymarket", help="Platform: polymarket or kalshi"),
     simulation: bool = typer.Option(True, "--simulation/--live", help="Check simulation or live trades"),
 ):
     """Manually check and update resolutions for open trades.
@@ -1341,7 +1341,7 @@ def test_resolution(
         trade_db = TradeHistoryDB()
 
         # Get open trades
-        open_trades = trade_db.get_open_trades(simulation=True, platform="kalshi")
+        open_trades = trade_db.get_open_trades(simulation=True, platform="polymarket")
 
         if not open_trades:
             console.print("[yellow]No open trades found to test with.[/yellow]")
