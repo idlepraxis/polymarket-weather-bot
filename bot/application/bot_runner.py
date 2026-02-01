@@ -1,5 +1,6 @@
 """Automated bot runner for continuous trading and resolution tracking."""
 
+import json
 import time
 import signal
 import sys
@@ -641,6 +642,12 @@ class BotRunner:
             outcome_prices = market.get('outcomePrices', [])
             outcomes = market.get('outcomes', ['Yes', 'No'])
 
+            # API returns these as JSON strings, parse them
+            if isinstance(outcome_prices, str):
+                outcome_prices = json.loads(outcome_prices)
+            if isinstance(outcomes, str):
+                outcomes = json.loads(outcomes)
+
             if not outcome_prices or len(outcome_prices) < 2:
                 # Try to get from CLOB client as fallback
                 condition_id = market.get('conditionId')
@@ -696,13 +703,43 @@ class BotRunner:
     def _calculate_trade_outcome(self, trade: Dict, market_info: Dict) -> bool:
         """Determine if trade won based on outcome."""
         outcome = market_info.get('outcome', '').lower()
+        trade_token_id = str(trade.get('token_id', ''))
 
         # For Kalshi: trade['token_id'] contains 'yes' or 'no'
-        # Match against market outcome
-        if 'yes' in trade['token_id'].lower():
+        if 'yes' in trade_token_id.lower():
             return outcome == 'yes'
-        else:
+        elif 'no' in trade_token_id.lower():
             return outcome == 'no'
+
+        # For Polymarket: token_id is a numeric string
+        # Need to look up the market to match token_id to YES/NO
+        if self.platform == "polymarket":
+            try:
+                market = self.client.get_market(trade['market_id'])
+                if market:
+                    # API returns these as JSON strings, parse them
+                    clob_token_ids = market.get('clobTokenIds', [])
+                    outcomes = market.get('outcomes', ['Yes', 'No'])
+
+                    if isinstance(clob_token_ids, str):
+                        clob_token_ids = json.loads(clob_token_ids)
+                    if isinstance(outcomes, str):
+                        outcomes = json.loads(outcomes)
+
+                    # Find which outcome our token matches
+                    for idx, token_id in enumerate(clob_token_ids):
+                        if str(token_id) == trade_token_id:
+                            trade_outcome = outcomes[idx].lower() if idx < len(outcomes) else 'yes'
+                            self.logger.debug(f"Trade token ...{trade_token_id[-10:]} matches {trade_outcome}")
+                            return outcome == trade_outcome
+
+                    self.logger.warning(f"Could not match token_id ...{trade_token_id[-10:]} to market outcomes")
+            except Exception as e:
+                self.logger.error(f"Error looking up market for outcome: {e}")
+
+        # Default: assume YES if we can't determine
+        self.logger.warning(f"Could not determine trade side, assuming YES")
+        return outcome == 'yes'
 
     def _calculate_pnl(self, trade: Dict, won: bool) -> float:
         """Calculate profit/loss for a trade."""
