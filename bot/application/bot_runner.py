@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 from bot.application.extreme_value_strategy import ExtremeValueStrategy
-from bot.connectors.kalshi import KalshiClient
 from bot.connectors.weather import WeatherConnector
 from bot.database.trade_history import TradeHistoryDB
 from bot.utils.config import get_config
@@ -27,11 +26,10 @@ except ImportError:
 class BotRunner:
     """Automated bot that scans, trades, and tracks resolutions."""
 
-    def __init__(self, platform: str = "kalshi", simulation: bool = True):
+    def __init__(self, simulation: bool = True):
         """Initialize bot runner.
 
         Args:
-            platform: Trading platform (kalshi or polymarket)
             simulation: Run in simulation mode (dry-run)
         """
         self.config = get_config()
@@ -43,7 +41,7 @@ class BotRunner:
             log_dir="logs"
         )
 
-        self.platform = platform.lower()
+        self.platform = "polymarket"
         self.simulation = simulation
         self.running = False
 
@@ -51,16 +49,13 @@ class BotRunner:
         self.trade_db = TradeHistoryDB()
         self.weather = WeatherConnector(self.config)
 
-        # Initialize platform client
-        if self.platform == "kalshi":
-            self.client = KalshiClient(self.config)
-        else:
-            if not POLYMARKET_AVAILABLE:
-                raise ImportError(
-                    "Polymarket support not available. Install required packages:\n"
-                    "pip install web3>=6.11.1 eth-account>=0.13.0 py-clob-client>=0.34.4"
-                )
-            self.client = PolymarketClient(self.config)
+        # Initialize Polymarket client
+        if not POLYMARKET_AVAILABLE:
+            raise ImportError(
+                "Polymarket support not available. Install required packages:\n"
+                "pip install web3>=6.11.1 eth-account>=0.13.0 py-clob-client>=0.34.4"
+            )
+        self.client = PolymarketClient(self.config)
 
         self.strategy = ExtremeValueStrategy(self.config, self.client, self.weather)
 
@@ -195,13 +190,9 @@ class BotRunner:
                 return
 
             # Fetch markets
-            self.logger.info(f"Fetching {self.platform} markets...")
-            if self.platform == "kalshi":
-                all_markets = self.client.get_weather_markets_direct(limit=200)
-                weather_markets = self.client.filter_weather_markets(all_markets)
-            else:
-                all_markets = self.client.get_all_markets()
-                weather_markets = self.client.filter_weather_markets(all_markets)
+            self.logger.info("Fetching Polymarket markets...")
+            all_markets = self.client.get_all_markets()
+            weather_markets = self.client.filter_weather_markets(all_markets)
 
             self.logger.info(f"Found {len(weather_markets)} weather markets")
 
@@ -308,31 +299,14 @@ class BotRunner:
 
         for signal in signals:
             try:
-                # Execute based on platform
-                if self.platform == "kalshi":
-                    ticker = signal.market.market_id
-                    side = "yes" if signal.action == "BUY" else "no"
-                    price_cents = int(signal.price * 100)
-                    count = int(signal.size / signal.price) if signal.price > 0 else 1000
-
-                    order_id = self.client.execute_limit_order(
-                        ticker=ticker,
-                        side=side,
-                        count=count,
-                        price=price_cents,
-                        simulation=self.simulation,
-                    )
-                else:
-                    order_id = self.client.execute_market_order(
-                        token_id=signal.token_id,
-                        amount=signal.size,
-                        simulation=self.simulation,
-                    )
+                # Execute on Polymarket
+                order_id = self.client.execute_market_order(
+                    token_id=signal.token_id,
+                    amount=signal.size,
+                    simulation=self.simulation,
+                )
 
                 # Create and log trade
-                # For Kalshi: count = signal.size / signal.price contracts
-                # Actual cost = count * signal.price ≈ signal.size (with rounding)
-                # For accuracy, just use signal.size as it's already the dollar amount
                 trade = Trade(
                     trade_id=order_id or f"sim_{signal.market.market_id}_{int(time.time())}",
                     timestamp=datetime.now(timezone.utc),
@@ -388,36 +362,27 @@ class BotRunner:
 
             resolved_count = 0
 
-            if self.platform == "kalshi":
-                # For Kalshi: Branch on simulation vs live mode
-                if self.simulation:
-                    # Simulation: Query finalized markets (no real positions exist)
-                    resolved_count = self._check_kalshi_markets_simulation(open_trades)
-                else:
-                    # Live: Use settlements API (real positions exist)
-                    resolved_count = self._check_kalshi_settlements(open_trades)
-            else:
-                # For Polymarket: Query individual markets (keeping old logic)
-                for trade in open_trades:
-                    try:
-                        market_id = trade['market_id']
-                        market_info = self._get_polymarket_status(market_id)
+            # Check each trade against Polymarket
+            for trade in open_trades:
+                try:
+                    market_id = trade['market_id']
+                    market_info = self._get_polymarket_status(market_id)
 
-                        if market_info and market_info.get('resolved'):
-                            won = self._calculate_trade_outcome(trade, market_info)
-                            pnl = self._calculate_pnl(trade, won)
+                    if market_info and market_info.get('resolved'):
+                        won = self._calculate_trade_outcome(trade, market_info)
+                        pnl = self._calculate_pnl(trade, won)
 
-                            self.trade_db.update_resolution(
-                                trade_id=trade['trade_id'],
-                                won=won,
-                                pnl=pnl,
-                                resolution_date=datetime.now(timezone.utc)
-                            )
+                        self.trade_db.update_resolution(
+                            trade_id=trade['trade_id'],
+                            won=won,
+                            pnl=pnl,
+                            resolution_date=datetime.now(timezone.utc)
+                        )
 
-                            resolved_count += 1
+                        resolved_count += 1
 
-                    except Exception as e:
-                        self.logger.debug(f"Error checking trade {trade['trade_id']}: {e}")
+                except Exception as e:
+                    self.logger.debug(f"Error checking trade {trade['trade_id']}: {e}")
 
             if resolved_count > 0:
                 self.logger.info(f"Updated {resolved_count} resolved trades")
@@ -426,193 +391,6 @@ class BotRunner:
 
         except Exception as e:
             self.logger.error(f"Error checking resolutions: {e}", exc_info=True)
-
-    def _check_kalshi_settlements(self, open_trades: List[Dict]) -> int:
-        """Check Kalshi settlements and update resolved trades.
-
-        Args:
-            open_trades: List of open trades from database
-
-        Returns:
-            Number of trades resolved
-        """
-        resolved_count = 0
-
-        try:
-            # Get all settlements from Kalshi
-            settlements = self.client.get_settlements(limit=200)
-
-            if not settlements:
-                self.logger.debug("No settlements found")
-                return 0
-
-            # Create a lookup map: ticker -> settlement
-            settlement_map = {s['ticker']: s for s in settlements}
-            self.logger.debug(f"Found settlements for {len(settlement_map)} markets")
-
-            # Check each open trade against settlements
-            for trade in open_trades:
-                ticker = trade['market_id']
-
-                if ticker in settlement_map:
-                    settlement = settlement_map[ticker]
-
-                    # Extract outcome from settlement
-                    market_result = settlement.get('market_result', '').lower()  # 'yes' or 'no'
-
-                    self.logger.info(f"Found settlement for {ticker}: result={market_result}")
-
-                    # Determine if trade won
-                    token_id = trade['token_id']
-                    if 'yes' in token_id.lower():
-                        won = market_result == 'yes'
-                    else:
-                        won = market_result == 'no'
-
-                    # Calculate P&L
-                    pnl = self._calculate_pnl(trade, won)
-
-                    # Update database
-                    self.trade_db.update_resolution(
-                        trade_id=trade['trade_id'],
-                        won=won,
-                        pnl=pnl,
-                        resolution_date=datetime.now(timezone.utc)
-                    )
-
-                    resolved_count += 1
-                    self.logger.info(f"Resolved: {ticker} - {'WON' if won else 'LOST'} (P&L: ${pnl:+.2f})")
-
-        except Exception as e:
-            self.logger.error(f"Error checking Kalshi settlements: {e}", exc_info=True)
-
-        return resolved_count
-
-    def _check_kalshi_markets_simulation(self, open_trades: List[Dict]) -> int:
-        """Check finalized Kalshi markets for simulation mode trades.
-
-        Since simulation mode doesn't create real positions on Kalshi,
-        we can't use the settlements API. Instead, we query markets by
-        series with status=finalized to find resolved markets.
-
-        Args:
-            open_trades: List of open trades from database
-
-        Returns:
-            Number of trades resolved
-        """
-        resolved_count = 0
-
-        try:
-            # Extract unique series tickers from open trades
-            # Market tickers look like: KXLOWTLAX-24DEC31
-            # Series ticker is the part before the hyphen: KXLOWTLAX
-            series_set = set()
-            for trade in open_trades:
-                ticker = trade['market_id']
-                # Extract series ticker (everything before the hyphen)
-                if '-' in ticker:
-                    series = ticker.split('-')[0]
-                    series_set.add(series)
-
-            if not series_set:
-                self.logger.debug("No series tickers found in open trades")
-                return 0
-
-            series_list = list(series_set)
-            self.logger.info(f"Checking finalized markets for {len(series_list)} series: {series_list[:5]}...")
-
-            # Fetch all finalized markets for these series
-            finalized_markets = self.client.get_finalized_markets_by_series(series_list)
-
-            if not finalized_markets:
-                self.logger.debug("No finalized markets found")
-                return 0
-
-            # Create a lookup map: ticker -> market
-            finalized_map = {m['ticker']: m for m in finalized_markets}
-            self.logger.debug(f"Found finalized markets for {len(finalized_map)} tickers")
-
-            # Check each open trade against finalized markets
-            for trade in open_trades:
-                ticker = trade['market_id']
-
-                if ticker in finalized_map:
-                    market = finalized_map[ticker]
-
-                    # Extract outcome from market
-                    market_result = market.get('result', '').lower()  # 'yes' or 'no'
-                    market_status = market.get('status', '')
-
-                    self.logger.info(f"Found finalized market for {ticker}: status={market_status}, result={market_result}")
-
-                    # Determine if trade won
-                    token_id = trade['token_id']
-                    if 'yes' in token_id.lower():
-                        won = market_result == 'yes'
-                    else:
-                        won = market_result == 'no'
-
-                    # Calculate P&L
-                    pnl = self._calculate_pnl(trade, won)
-
-                    # Update database
-                    self.trade_db.update_resolution(
-                        trade_id=trade['trade_id'],
-                        won=won,
-                        pnl=pnl,
-                        resolution_date=datetime.now(timezone.utc)
-                    )
-
-                    resolved_count += 1
-                    self.logger.info(f"Resolved: {ticker} - {'WON' if won else 'LOST'} (P&L: ${pnl:+.2f})")
-
-        except Exception as e:
-            self.logger.error(f"Error checking Kalshi finalized markets: {e}", exc_info=True)
-
-        return resolved_count
-
-    def _get_kalshi_market_status(self, ticker: str) -> Optional[Dict[str, Any]]:
-        """Get market status from Kalshi API."""
-        try:
-            # Use Kalshi API to get market details
-            url = f"{self.client.api_base}/markets/{ticker}"
-            response = self.client._make_request("GET", url)
-
-            # Check if request was successful
-            if response.status_code == 404:
-                # Market was deleted (likely expired/finalized and removed from API)
-                self.logger.warning(f"Market {ticker} not found (404) - likely expired and removed from API")
-                return None
-            elif response.status_code != 200:
-                self.logger.debug(f"Failed to get market {ticker}: status {response.status_code}")
-                return None
-
-            # Parse JSON response
-            data = response.json()
-
-            if data and 'market' in data:
-                market = data['market']
-                status = market.get('status', '')
-                result = market.get('result', '')
-
-                # DEBUG: Log what we're seeing
-                self.logger.debug(f"Market {ticker}: status={status}, result={result}")
-
-                # Kalshi uses 'finalized' for resolved markets
-                is_resolved = status == 'finalized'
-
-                if is_resolved:
-                    self.logger.info(f"Found resolved market: {ticker} - status={status}, result={result}")
-
-                return {
-                    'resolved': is_resolved,
-                    'outcome': result  # 'yes' or 'no'
-                }
-        except Exception as e:
-            self.logger.error(f"Error getting Kalshi market status for {ticker}: {e}")
-
-        return None
 
     def _get_polymarket_status(self, market_id: str) -> Optional[Dict[str, Any]]:
         """Get market status from Polymarket."""
@@ -623,8 +401,7 @@ class BotRunner:
         """Determine if trade won based on outcome."""
         outcome = market_info.get('outcome', '').lower()
 
-        # For Kalshi: trade['token_id'] contains 'yes' or 'no'
-        # Match against market outcome
+        # trade['token_id'] contains 'yes' or 'no'
         if 'yes' in trade['token_id'].lower():
             return outcome == 'yes'
         else:
