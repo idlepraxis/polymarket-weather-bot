@@ -246,20 +246,27 @@ The 1-2°F difference caused systematic losses on close threshold markets.
 
 ### Position Sizing Logic
 
-```
-For YES trades:
-  price ≤ 5¢  → $5.00 (aggressive)
-  price ≤ 8¢  → $2.50 (max)
-  price ≤ 10¢ → $2.50 (max)
-  price ≤ 12¢ → $1.88 (75% of max)
-  else        → $1.50 (min)
+**v2.5.2: INVERTED logic** - bet MORE on proven winners, LESS on traps.
 
-For NO trades (based on YES price):
-  YES ≥ 60¢ → $5.00 (aggressive)
-  YES ≥ 55¢ → $2.50 (max)
-  YES ≥ 50¢ → $2.50 (max)
-  else      → $1.50 (min)
 ```
+For YES trades (based on win rate data):
+  price < 5¢  → $1.50 (min) - TRAP (0% historical win rate)
+  price ≤ 8¢  → $2.50 (max) - good win rate + great payoff
+  price ≤ 10¢ → $2.50 (max) - decent
+  price ≤ 12¢ → $5.00 (aggressive) - BEST win rate (20%)
+  else        → $1.50 (min) - lower payoff ratio
+
+For NO trades (based on NO price = 1 - YES price):
+  NO < 10¢  → $1.50 (min) - TRAP (YES >90%)
+  NO < 30¢  → $1.50 (min) - risky
+  NO < 40¢  → $2.50 (max) - good sweet spot
+  NO < 45¢  → $5.00 (aggressive) - best balance
+  else      → $2.50 (max) - moderate payoff
+```
+
+**Why inverted?** Analysis showed the old logic was backwards:
+- Cheap trades (<5¢) had 0% win rate but got $5 positions
+- 10-12¢ trades had 20% win rate but got only $1.88 positions
 
 ---
 
@@ -406,6 +413,7 @@ When the bot scans for trades, it follows this logic:
 
 | Version | Key Changes |
 |---------|-------------|
+| v2.5.2 | Inverted position sizing - bet more on proven winners (10-12¢), less on traps (<5¢) |
 | v2.5.1 | Added NO min price floor (same 3¢ filter as YES) |
 | v2.5.0 | Added min price floor, NWS-only mode, trade type preferences, increased std_dev |
 | v2.4.0 | Added NWS integration, fixed threshold direction bug |

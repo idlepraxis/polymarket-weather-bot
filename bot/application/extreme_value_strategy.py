@@ -235,23 +235,22 @@ class ExtremeValueStrategy:
     def _calculate_yes_position_size(self, yes_price: float) -> float:
         """Calculate position size for YES purchases.
 
-        Smaller prices = smaller positions (more shares for same $).
+        v2.5.2: INVERTED logic based on actual win rate data:
+        - 3-5¢: 0% win rate historically → minimum position (risky traps)
+        - 5-8¢: 18% win rate + great payoff → max position
+        - 8-10¢: decent → max position
+        - 10-12¢: 20% win rate (best!) → aggressive position
+        - >12¢: lower payoff ratio → minimum position
         """
-        # Base position
-        base = self.min_position
-
-        # Scale based on how cheap it is
-        if yes_price <= 0.05:  # Super cheap (≤5¢)
-            # Very attractive, but limit shares
-            # At 5¢, $1 = 20 shares
-            size = self.aggressive_max
-        elif yes_price <= 0.08:  # Very cheap (5-8¢)
-            size = min(self.max_position * 2, self.aggressive_max)
-        elif yes_price <= 0.10:  # Ideal range (8-10¢)
+        if yes_price < 0.05:  # 3-5¢ range - HIGH RISK (was 0% win rate)
+            size = self.min_position
+        elif yes_price <= 0.08:  # 5-8¢ - good win rate + great payoff
             size = self.max_position
-        elif yes_price <= 0.12:  # Good (10-12¢)
-            size = self.max_position * 0.75
-        else:  # Acceptable (12-15¢)
+        elif yes_price <= 0.10:  # 8-10¢ - decent
+            size = self.max_position
+        elif yes_price <= 0.12:  # 10-12¢ - BEST win rate (20%)
+            size = self.aggressive_max
+        else:  # >12¢ - lower payoff ratio
             size = self.min_position
 
         return round(size, 2)
@@ -259,25 +258,26 @@ class ExtremeValueStrategy:
     def _calculate_no_position_size(self, yes_price: float) -> float:
         """Calculate position size for NO purchases.
 
-        Higher YES price = cheaper NO = larger position.
+        v2.5.2: INVERTED logic based on YES position sizing insights:
+        - YES >90% (NO <10¢): TRAP - same as cheap YES, minimum position
+        - YES 70-90% (NO 10-30¢): Risky - minimum position
+        - YES 60-70% (NO 30-40¢): Good sweet spot - max position
+        - YES 55-60% (NO 40-45¢): Best balance - aggressive position
+        - YES 50-55% (NO 45-50¢): Lower payoff - max position
         """
-        # NO price = 1 - YES price
         no_price = 1 - yes_price
 
-        # Base position
-        base = self.min_position
-
-        # Scale based on how cheap NO is
-        if yes_price >= 0.60:  # YES ≥60%, NO ≤40% - very cheap NO
-            size = self.aggressive_max
-        elif yes_price >= 0.55:  # YES ≥55%, NO ≤45%
-            size = min(self.max_position * 2, self.aggressive_max)
-        elif yes_price >= 0.50:  # YES ≥50%, NO ≤50%
-            size = self.max_position
-        elif yes_price >= 0.45:  # YES ≥45%, NO ≤55%
-            size = self.max_position * 0.75
-        else:  # YES 40-45%, NO 55-60%
+        # Mirror the YES logic: very cheap NO (<10¢) are traps
+        if no_price < 0.10:  # YES >90%, NO <10¢ - TRAP
             size = self.min_position
+        elif no_price < 0.30:  # YES 70-90%, NO 10-30¢ - risky
+            size = self.min_position
+        elif no_price < 0.40:  # YES 60-70%, NO 30-40¢ - good
+            size = self.max_position
+        elif no_price < 0.45:  # YES 55-60%, NO 40-45¢ - sweet spot
+            size = self.aggressive_max
+        else:  # YES 50-55%, NO 45-50¢ - moderate payoff
+            size = self.max_position
 
         return round(size, 2)
 

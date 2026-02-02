@@ -5,6 +5,41 @@ All notable changes to the Polymarket Weather Bot will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2] - 2026-02-02
+
+### Changed
+- **INVERTED position sizing logic**: Bet MORE on proven winners, LESS on traps
+  - Old logic: Cheaper prices → larger positions (backwards!)
+  - New logic: Bet based on actual win rate data
+
+  **YES Position Sizing (inverted):**
+  | Price Range | Old Size | New Size | Rationale |
+  |-------------|----------|----------|-----------|
+  | 3-5¢ | $5.00 | $1.50 | 0% historical win rate - traps |
+  | 5-8¢ | $5.00 | $2.50 | 18% win rate + great payoff |
+  | 8-10¢ | $2.50 | $2.50 | Decent performance |
+  | 10-12¢ | $1.88 | $5.00 | **Best win rate (20%)** |
+  | >12¢ | $1.50 | $1.50 | Lower payoff ratio |
+
+  **NO Position Sizing (inverted):**
+  | NO Price | Old Size | New Size | Rationale |
+  |----------|----------|----------|-----------|
+  | <10¢ | $5.00 | $1.50 | Trap (YES >90%) |
+  | 10-30¢ | $5.00 | $1.50 | Risky |
+  | 30-40¢ | $2.50 | $2.50 | Good sweet spot |
+  | 40-45¢ | $2.50 | $5.00 | Best balance |
+  | 45-50¢ | $1.50 | $2.50 | Moderate payoff |
+
+### Analysis
+Trade data showed position sizing was backwards:
+- $5.00 trades: 9.1% win rate, -$39.62 loss
+- $2.50 trades at <5¢: 0% win rate, -$122.50 loss
+- $1.12 trades: 20% win rate, +$5.07 profit (only profitable bucket!)
+
+The 10-12¢ range had 20% win rate but was getting smallest positions.
+
+---
+
 ## [2.5.1] - 2026-02-02
 
 ### Added
