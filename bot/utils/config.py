@@ -58,6 +58,7 @@ class Config(BaseSettings):
     extreme_yes_ideal_price: float = Field(0.08, alias="EXTREME_YES_IDEAL_PRICE")  # Tighter: was 0.10
     extreme_no_min_yes_price: float = Field(0.50, alias="EXTREME_NO_MIN_YES_PRICE")  # Stricter: was 0.40
     extreme_no_ideal_yes_price: float = Field(0.60, alias="EXTREME_NO_IDEAL_YES_PRICE")  # Stricter: was 0.50
+    extreme_no_min_price: float = Field(0.03, alias="EXTREME_NO_MIN_PRICE")  # v2.5.1: Skip sub-3¢ NO traps (same as YES)
     # Position sizing - larger positions since fewer trades (~$2.50 average)
     extreme_min_position: float = Field(1.50, alias="EXTREME_MIN_POSITION")  # Was 0.50
     extreme_max_position: float = Field(2.50, alias="EXTREME_MAX_POSITION")  # Was 1.00

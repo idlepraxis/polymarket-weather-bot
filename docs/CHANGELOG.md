@@ -5,6 +5,24 @@ All notable changes to the Polymarket Weather Bot will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-02-02
+
+### Added
+- **Minimum NO price floor (3¢)**: Skip sub-3¢ NO trades (same logic as YES minimum)
+  - New config: `EXTREME_NO_MIN_PRICE=0.03`
+  - If YES is 97%+, NO costs only 3¢ - these are traps just like cheap YES trades
+  - Analysis showed a 0.5¢ NO trade slipped through the previous filters
+
+### Technical Details
+
+#### Files Modified
+- `bot/utils/config.py`:
+  - Added `extreme_no_min_price` (default 0.03)
+- `bot/application/extreme_value_strategy.py`:
+  - Added minimum price check in `_check_no_opportunity()`
+
+---
+
 ## [2.5.0] - 2026-02-02
 
 ### Added

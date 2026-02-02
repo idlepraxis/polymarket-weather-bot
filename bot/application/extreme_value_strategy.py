@@ -46,6 +46,7 @@ class ExtremeValueStrategy:
         self.yes_ideal_price = getattr(config, "extreme_yes_ideal_price", 0.10)
         self.no_min_yes_price = getattr(config, "extreme_no_min_yes_price", 0.40)
         self.no_ideal_yes_price = getattr(config, "extreme_no_ideal_yes_price", 0.50)
+        self.no_min_price = getattr(config, "extreme_no_min_price", 0.03)  # v2.5.1: Skip sub-3¢ NO traps
 
         # Position sizing (target ~$1 average per trade)
         self.min_position = getattr(config, "extreme_min_position", 0.50)  # $0.50
@@ -180,6 +181,14 @@ class ExtremeValueStrategy:
 
         # Must be above minimum threshold (YES overpriced = NO underpriced)
         if yes_price <= self.no_min_yes_price:
+            return None
+
+        # v2.5.1: Skip sub-3¢ NO trap trades (same logic as YES minimum)
+        # If YES is 97%+, NO costs only 3¢ - these are traps just like cheap YES
+        if no_price < self.no_min_price:
+            self.logger.debug(
+                f"SKIP {market.market_id}: NO price {no_price:.1%} below minimum {self.no_min_price:.1%} (sub-3¢ trap)"
+            )
             return None
 
         # Calculate position size based on how expensive YES is

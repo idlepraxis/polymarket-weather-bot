@@ -8,6 +8,7 @@ This document is the **single source of truth** for understanding how the bot ma
 |-----------|---------|---------|
 | `EXTREME_YES_MIN_PRICE` | 0.03 | Skip YES trades under 3¢ |
 | `EXTREME_YES_MAX_PRICE` | 0.12 | Only buy YES if price < 12¢ |
+| `EXTREME_NO_MIN_PRICE` | 0.03 | Skip NO trades under 3¢ |
 | `EXTREME_NO_MIN_YES_PRICE` | 0.50 | Only buy NO if YES > 50¢ |
 | `MIN_EDGE_THRESHOLD` | 0.10 | Require 10% edge minimum |
 | `PREFER_NO_ON_RANGE` | true | Prioritize NO bets on range markets |
@@ -30,6 +31,19 @@ This document is the **single source of truth** for understanding how the bot ma
 - Lower value = More trades, but includes low-probability traps
 
 **Backtest impact:** Setting this to 0.03 improved P&L from -$38 to +$32.
+
+---
+
+### `EXTREME_NO_MIN_PRICE`
+**Default:** `0.03` (3¢)
+
+**What it does:** Skips any NO trade priced below this threshold.
+
+**Why it exists:** Same logic as YES minimum - if YES is at 97%+, NO costs only 3¢. These extreme prices are traps just like cheap YES trades. The market is correctly pricing rare events as unlikely.
+
+**Trade-off:**
+- Higher value = Fewer NO trades, but avoids trap trades
+- Lower value = More NO trades, but includes low-probability traps
 
 ---
 
@@ -332,6 +346,8 @@ When the bot scans for trades, it follows this logic:
 3. For each market, check NO opportunity:
    ├── Is YES price > EXTREME_NO_MIN_YES_PRICE (50¢)?
    │   └── No → Skip
+   ├── Is NO price ≥ EXTREME_NO_MIN_PRICE (3¢)?
+   │   └── No → Skip (sub-3¢ trap)
    ├── Get weather forecast
    ├── Calculate fair probability for NO
    ├── Is edge ≥ MIN_EDGE_THRESHOLD (10%)?
@@ -390,6 +406,7 @@ When the bot scans for trades, it follows this logic:
 
 | Version | Key Changes |
 |---------|-------------|
+| v2.5.1 | Added NO min price floor (same 3¢ filter as YES) |
 | v2.5.0 | Added min price floor, NWS-only mode, trade type preferences, increased std_dev |
 | v2.4.0 | Added NWS integration, fixed threshold direction bug |
 | v2.3.0 | Added range probability calculation, weather API integration |
