@@ -5,6 +5,73 @@ All notable changes to the Polymarket Weather Bot will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-02-02
+
+### Added
+- **Minimum price floor (3¢)**: Skip sub-3¢ trades that have 0% historical win rate
+  - New config: `EXTREME_YES_MIN_PRICE=0.03`
+  - Analysis showed 28 trades <3¢ with 0 wins and -$70 loss
+- **Trade type preferences**: Prioritize proven profitable trade types
+  - New config: `PREFER_NO_ON_RANGE=true` - NO bets on range markets have 18.2% win rate
+  - New config: `SKIP_YES_ON_THRESHOLD=false` - Optionally skip YES threshold bets (4% win rate)
+  - Signals now sorted by trade type priority, then by EV
+- **NWS-only mode**: Use NWS exclusively when available
+  - New config: `PREFER_NWS_ONLY=true`
+  - Kalshi uses NWS station data for resolution; ensemble averaging introduced bias
+
+### Changed
+- **Increased forecast uncertainty (std_dev)**: 4.0°F → 7.0°F
+  - Analysis showed actual forecast errors of 6-10°F
+  - 97% fair probability trades were losing due to overconfidence
+  - New std_dev produces more conservative probability estimates
+- **Disabled ensemble by default**: `ENABLE_ENSEMBLE_MODELS=false`
+  - WeatherAPI/OpenWeather temps were 1-2°F higher than NWS station data
+  - This bias caused systematic losses on threshold markets
+
+### Fixed
+- **Probability calibration**: High fair probability estimates (70-97%) had near-0% actual win rate
+  - Root cause: Forecasts systematically differed from Kalshi's NWS resolution data
+  - Fix: NWS-only mode + higher std_dev produces calibrated probabilities
+
+### Analysis Summary (v2.4.0 Results)
+Based on 84 simulation trades:
+
+| Segment | Trades | Wins | Win Rate | P&L |
+|---------|--------|------|----------|-----|
+| Entry <3¢ | 28 | 0 | 0.0% | -$70.00 |
+| Entry 3-6¢ | 11 | 1 | 9.1% | +$17.95 |
+| Entry >10¢ | 13 | 2 | 15.4% | +$3.81 |
+| NO on RANGE | 11 | 2 | 18.2% | +$34.69 |
+| YES on THRESHOLD | 24 | 1 | 4.2% | -$42.19 |
+
+### Technical Details
+
+#### Files Modified
+- `bot/utils/config.py`:
+  - Added `extreme_yes_min_price` (default 0.03)
+  - Added `prefer_no_on_range` (default True)
+  - Added `skip_yes_on_threshold` (default False)
+  - Added `prefer_nws_only` (default True)
+  - Changed `enable_ensemble_models` default to False
+- `bot/application/extreme_value_strategy.py`:
+  - Added minimum price check in `_check_yes_opportunity()`
+  - Added threshold market skip option
+  - Updated `scan_for_opportunities()` to prioritize NO/RANGE trades
+- `bot/connectors/weather.py`:
+  - Increased `std_dev` from 4.0 to 7.0 in both probability functions
+  - Added NWS-only mode in `get_forecast()`
+
+#### Configuration Changes
+| Parameter | Old Value | New Value |
+|-----------|-----------|-----------|
+| `EXTREME_YES_MIN_PRICE` | (none) | 0.03 |
+| `PREFER_NO_ON_RANGE` | (none) | true |
+| `PREFER_NWS_ONLY` | (none) | true |
+| `ENABLE_ENSEMBLE_MODELS` | true | false |
+| Forecast std_dev | 4.0°F | 7.0°F |
+
+---
+
 ## [2.4.0] - 2026-01-31
 
 ### Added
