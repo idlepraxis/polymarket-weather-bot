@@ -39,6 +39,8 @@ class WeatherConnector:
         if forecast:
             self.cache[cache_key] = (datetime.utcnow(), forecast)
 
+            # print(f"forecast=: location={forecast.location} confidence={forecast.confidence} temp_low_f={forecast.temp_low_f} temp_high_f={forecast.temp_high_f} temp_low_c={forecast.temp_low_c} temp_high_c={forecast.temp_high_c}")
+
         return forecast
 
     def _get_ensemble_forecast(self, location: str, date: datetime) -> Optional[WeatherForecast]:
@@ -88,7 +90,7 @@ class WeatherConnector:
     def _get_openweather_forecast(self, location: str, date: datetime) -> Optional[WeatherForecast]:
         """Get forecast from OpenWeatherMap API."""
 
-        print(f"Find forecast: {location} on {date}")
+        # print(f"Find forecast: {location} on {date}")
         try:
             # First, get coordinates for location
             geo_url = "https://api.openweathermap.org/geo/1.0/direct"
