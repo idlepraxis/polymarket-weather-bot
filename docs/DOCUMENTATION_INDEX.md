@@ -26,6 +26,7 @@ polymarket-weather-bot/
 |----------|---------|----------|
 | `ARCHITECTURE.md` | System architecture, data flow, common issues | Understanding how components connect, troubleshooting |
 | `EXTREME_VALUE_STRATEGY.md` | Strategy explanation and theory | Understanding WHY the strategy works |
+| `STRATEGY_PARAMETERS.md` | **All strategy parameters explained** | Understanding why trades are made, tuning the bot |
 | `CHANGELOG.md` | Version history and recent improvements | Understanding what changed and why |
 
 ### 📖 User Guides & Tutorials

@@ -1359,5 +1359,168 @@ def test_resolution(
         raise typer.Exit(1)
 
 
+# ============================================================================
+# BACKTESTING COMMANDS
+# ============================================================================
+
+@app.command()
+def backtest(
+    min_price: float = typer.Option(0.03, help="Minimum YES price (skip below)"),
+    max_price: float = typer.Option(0.12, help="Maximum YES price (skip above)"),
+    min_edge: float = typer.Option(0.10, help="Minimum edge required"),
+    skip_yes_threshold: bool = typer.Option(False, "--skip-yes-threshold", help="Skip YES bets on threshold markets"),
+    compare: bool = typer.Option(False, "--compare", help="Compare multiple strategies"),
+):
+    """Run backtest against historical trades.
+
+    Examples:
+        python bot.py backtest
+        python bot.py backtest --min-price 0.05 --skip-yes-threshold
+        python bot.py backtest --compare
+    """
+    from bot.backtesting.engine import BacktestEngine, BacktestParams
+
+    try:
+        engine = BacktestEngine()
+
+        if compare:
+            # Compare multiple strategy configurations
+            param_sets = [
+                BacktestParams(),  # Current defaults
+                BacktestParams(yes_min_price=0.0),  # No min price filter
+                BacktestParams(skip_yes_on_threshold=True),  # Skip YES threshold
+                BacktestParams(yes_min_price=0.05),  # Higher min price
+                BacktestParams(skip_yes_on_threshold=True, yes_min_price=0.03),  # Combined
+            ]
+            names = [
+                "v2.5.0 Defaults",
+                "No Min Price",
+                "Skip YES Threshold",
+                "Min Price 5¢",
+                "Strict Mode",
+            ]
+
+            results = engine.compare_strategies(param_sets, names)
+            engine.print_comparison(results)
+        else:
+            # Single backtest with specified parameters
+            params = BacktestParams(
+                yes_min_price=min_price,
+                yes_max_price=max_price,
+                min_edge=min_edge,
+                skip_yes_on_threshold=skip_yes_threshold,
+            )
+
+            result = engine.run_backtest(params)
+
+            # Display results
+            console.print("\n" + "=" * 70)
+            console.print("[bold cyan]BACKTEST RESULTS[/bold cyan]")
+            console.print("=" * 70)
+
+            # Parameters used
+            console.print("\n[yellow]Parameters:[/yellow]")
+            console.print(f"  Min Price: {params.yes_min_price:.0%}")
+            console.print(f"  Max Price: {params.yes_max_price:.0%}")
+            console.print(f"  Min Edge: {params.min_edge:.0%}")
+            console.print(f"  Skip YES Threshold: {params.skip_yes_on_threshold}")
+
+            # Summary
+            console.print("\n[yellow]Results:[/yellow]")
+            console.print(f"  Trades: {result.total_trades}")
+            console.print(f"  Wins: {result.wins} ({result.win_rate*100:.1f}%)")
+            console.print(f"  Losses: {result.losses}")
+            console.print(f"  P&L: ${result.total_pnl:+.2f}")
+            console.print(f"  Invested: ${result.total_invested:.2f}")
+            console.print(f"  ROI: {result.roi*100:+.1f}%")
+
+            # Breakdown by category
+            if result.breakdown:
+                console.print("\n[yellow]Breakdown by Trade Type:[/yellow]")
+                breakdown_table = Table(box=box.SIMPLE)
+                breakdown_table.add_column("Type", style="cyan")
+                breakdown_table.add_column("Trades", justify="right")
+                breakdown_table.add_column("Wins", justify="right")
+                breakdown_table.add_column("Win Rate", justify="right")
+                breakdown_table.add_column("P&L", justify="right")
+                breakdown_table.add_column("ROI", justify="right")
+
+                for cat, data in result.breakdown.items():
+                    breakdown_table.add_row(
+                        cat,
+                        str(data["trades"]),
+                        str(data["wins"]),
+                        f"{data['win_rate']*100:.1f}%",
+                        f"${data['pnl']:+.2f}",
+                        f"{data['roi']*100:+.1f}%",
+                    )
+
+                console.print(breakdown_table)
+
+            # Skipped trades
+            if result.skipped:
+                console.print("\n[yellow]Skipped Trades:[/yellow]")
+                for reason, trades in result.skipped.items():
+                    skipped_pnl = sum(t["pnl"] or 0 for t in trades)
+                    console.print(f"  {reason}: {len(trades)} trades (${skipped_pnl:+.2f} avoided P&L)")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        import traceback
+        console.print(traceback.format_exc())
+        raise typer.Exit(1)
+
+
+@app.command("backtest-compare")
+def backtest_compare(
+    save: bool = typer.Option(False, "--save", help="Save results to backtest database"),
+):
+    """Compare all common strategy configurations.
+
+    This runs multiple backtests and shows a comparison table.
+
+    Examples:
+        python bot.py backtest-compare
+        python bot.py backtest-compare --save
+    """
+    from bot.backtesting.engine import BacktestEngine, BacktestParams
+    from bot.backtesting.database import BacktestDatabase
+
+    try:
+        engine = BacktestEngine()
+
+        # Define strategies to compare
+        strategies = [
+            ("Actual v2.4.0", BacktestParams(yes_min_price=0.0, skip_yes_on_threshold=False)),
+            ("Min 3¢ Only", BacktestParams(yes_min_price=0.03, skip_yes_on_threshold=False)),
+            ("Skip YES Thresh", BacktestParams(yes_min_price=0.0, skip_yes_on_threshold=True)),
+            ("v2.5.0 Default", BacktestParams(yes_min_price=0.03, skip_yes_on_threshold=False)),
+            ("Strict Mode", BacktestParams(yes_min_price=0.03, skip_yes_on_threshold=True)),
+            ("Conservative", BacktestParams(yes_min_price=0.05, skip_yes_on_threshold=True, min_edge=0.15)),
+        ]
+
+        names = [s[0] for s in strategies]
+        param_sets = [s[1] for s in strategies]
+
+        results = engine.compare_strategies(param_sets, names)
+        engine.print_comparison(results)
+
+        if save:
+            db = BacktestDatabase()
+            for r in results:
+                db.save_backtest_run(
+                    run_name=r["name"],
+                    params=r["params"],
+                    results=r,
+                )
+            console.print(f"\n[green]✓ Saved {len(results)} backtest results to database[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        import traceback
+        console.print(traceback.format_exc())
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
