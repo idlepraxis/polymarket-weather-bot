@@ -45,6 +45,73 @@ def sample_forecast():
 class TestParseMarketQuestion:
     """Tests for parse_market_question() function."""
 
+    def test_parse_celsius_threshold(self, weather_connector):
+        """Test parsing Celsius temperature (converted to Fahrenheit internally)."""
+        question = "Will the highest temperature in Buenos Aires be 35°C on January 31?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "Buenos Aires"
+        assert parsed["is_range"] == False
+        # 35°C = 95°F
+        assert parsed["threshold"] == 95.0
+        assert parsed["original_celsius"] == 35.0
+        assert parsed["threshold_type"] == "high_temp_f"
+        # Date should be January 31 (year depends on current date)
+        assert parsed["date"] is not None
+        assert parsed["date"].month == 1
+        assert parsed["date"].day == 31
+
+    def test_parse_celsius_or_below(self, weather_connector):
+        """Test parsing Celsius with 'or below' direction."""
+        question = "Will the highest temperature in London be 5°C or below on January 31?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "London"
+        assert parsed["is_range"] == False
+        # 5°C = 41°F
+        assert parsed["threshold"] == 41.0
+        assert parsed["original_celsius"] == 5.0
+        assert parsed["threshold_type"] == "high_temp_f"
+        assert parsed["threshold_direction"] == "below"
+
+    def test_parse_celsius_or_higher(self, weather_connector):
+        """Test parsing Celsius with 'or higher' direction."""
+        question = "Will the highest temperature in Ankara be 7°C or higher on February 1?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "Ankara"
+        assert parsed["is_range"] == False
+        # 7°C = 44.6°F
+        assert isclose(parsed["threshold"], 44.6, rel_tol=0.01)
+        assert parsed["original_celsius"] == 7.0
+        assert parsed["threshold_type"] == "high_temp_f"
+        assert parsed["threshold_direction"] == "above"
+
+    def test_parse_negative_celsius(self, weather_connector):
+        """Test parsing negative Celsius temperature."""
+        question = "Will the lowest temperature in Toronto be -5°C or below on January 30?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "Toronto"
+        assert parsed["is_range"] == False
+        # -5°C = 23°F
+        assert parsed["threshold"] == 23.0
+        assert parsed["original_celsius"] == -5.0
+        assert parsed["threshold_type"] == "low_temp_f"
+        assert parsed["threshold_direction"] == "below"
+
+    def test_parse_fahrenheit_or_below(self, weather_connector):
+        """Test parsing Fahrenheit with 'or below' direction."""
+        question = "Will the highest temperature in NYC be 32°F or below on January 31?"
+        parsed = weather_connector.parse_market_question(question)
+
+        assert parsed["location"] == "NYC"
+        assert parsed["is_range"] == False
+        assert parsed["threshold"] == 32.0
+        assert parsed.get("original_celsius") is None
+        assert parsed["threshold_type"] == "high_temp_f"
+        assert parsed["threshold_direction"] == "below"
+
     def test_parse_kalshi_range_low_temp(self, weather_connector):
         """Test parsing Kalshi-style range market for low temperature."""
         question = "Will the minimum temperature in Chicago be 3-4° on Jan 27, 2026?"
@@ -119,7 +186,7 @@ class TestParseMarketQuestion:
 
     def test_parse_unknown_location_returns_none(self, weather_connector):
         """Test that unknown locations return None (not crash)."""
-        question = "Will the temperature in Toronto be 30-35° on Jan 27, 2026?"
+        question = "Will the temperature in FooBar be 30-35° on Jan 27, 2026?"
         parsed = weather_connector.parse_market_question(question)
 
         # Toronto is not in the city list, should return None
