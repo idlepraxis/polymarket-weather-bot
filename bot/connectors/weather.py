@@ -636,8 +636,12 @@ class WeatherConnector:
         ]
 
         question_lower = question.lower()
-        for city in cities:
-            if city.lower() in question_lower:
+        # Sort cities by length (longest first) to match "Los Angeles" before "LA"
+        # and use word boundaries to avoid "LA" matching "Atlanta"
+        for city in sorted(cities, key=len, reverse=True):
+            # Use word boundary regex to match whole words only
+            pattern = r'\b' + re.escape(city.lower()) + r'\b'
+            if re.search(pattern, question_lower):
                 result["location"] = city
                 break
 

@@ -160,6 +160,7 @@ class TestParseMarketQuestion:
     def test_parse_various_cities(self, weather_connector):
         """Test parsing markets for different cities."""
         cities = [
+            ("Atlanta", "Will the highest temperature in Atlanta be 56°F or higher on February 4?"),
             ("Los Angeles", "Will the minimum temperature in Los Angeles be 48-49° on Jan 27, 2026?"),
             ("Miami", "Will the minimum temperature in Miami be 49-50° on Jan 27, 2026?"),
             ("San Francisco", "Will the maximum temperature in San Francisco be >65° on Jan 28, 2026?"),
