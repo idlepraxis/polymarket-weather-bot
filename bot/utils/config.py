@@ -54,6 +54,7 @@ class Config(BaseSettings):
 
     # Extreme Value Strategy Parameters
     extreme_yes_max_price: float = Field(0.12, alias="EXTREME_YES_MAX_PRICE")  # Tighter: was 0.15
+    extreme_yes_min_price: float = Field(0.03, alias="EXTREME_YES_MIN_PRICE")  # v2.5.0: Skip sub-3¢ traps (0% win rate)
     extreme_yes_ideal_price: float = Field(0.08, alias="EXTREME_YES_IDEAL_PRICE")  # Tighter: was 0.10
     extreme_no_min_yes_price: float = Field(0.50, alias="EXTREME_NO_MIN_YES_PRICE")  # Stricter: was 0.40
     extreme_no_ideal_yes_price: float = Field(0.60, alias="EXTREME_NO_IDEAL_YES_PRICE")  # Stricter: was 0.50
@@ -61,6 +62,9 @@ class Config(BaseSettings):
     extreme_min_position: float = Field(1.50, alias="EXTREME_MIN_POSITION")  # Was 0.50
     extreme_max_position: float = Field(2.50, alias="EXTREME_MAX_POSITION")  # Was 1.00
     extreme_aggressive_max: float = Field(5.00, alias="EXTREME_AGGRESSIVE_MAX")  # Was 1.50
+    # Trade type preferences (v2.5.0)
+    prefer_no_on_range: bool = Field(True, alias="PREFER_NO_ON_RANGE")  # NO/RANGE has 18.2% win rate vs 4% YES
+    skip_yes_on_threshold: bool = Field(False, alias="SKIP_YES_ON_THRESHOLD")  # Optionally skip YES threshold bets
 
     # Risk Management
     bankroll_usdc: float = Field(1000.0, alias="BANKROLL_USDC")
@@ -88,7 +92,8 @@ class Config(BaseSettings):
 
     # Optional: Advanced Features
     enable_ml_forecasts: bool = Field(False, alias="ENABLE_ML_FORECASTS")
-    enable_ensemble_models: bool = Field(True, alias="ENABLE_ENSEMBLE_MODELS")
+    enable_ensemble_models: bool = Field(False, alias="ENABLE_ENSEMBLE_MODELS")  # v2.5.0: NWS-only by default (Kalshi uses NWS)
+    prefer_nws_only: bool = Field(True, alias="PREFER_NWS_ONLY")  # v2.5.0: Use NWS exclusively when available
 
     # Polymarket Constants
     clob_url: str = "https://clob.polymarket.com"

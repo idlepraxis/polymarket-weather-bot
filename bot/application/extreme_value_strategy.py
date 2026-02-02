@@ -42,6 +42,7 @@ class ExtremeValueStrategy:
 
         # Strategy parameters (configurable via config)
         self.yes_max_price = getattr(config, "extreme_yes_max_price", 0.15)
+        self.yes_min_price = getattr(config, "extreme_yes_min_price", 0.03)  # v2.5.0: Skip sub-3¢ traps
         self.yes_ideal_price = getattr(config, "extreme_yes_ideal_price", 0.10)
         self.no_min_yes_price = getattr(config, "extreme_no_min_yes_price", 0.40)
         self.no_ideal_yes_price = getattr(config, "extreme_no_ideal_yes_price", 0.50)
@@ -50,6 +51,10 @@ class ExtremeValueStrategy:
         self.min_position = getattr(config, "extreme_min_position", 0.50)  # $0.50
         self.max_position = getattr(config, "extreme_max_position", 1.00)  # $1.00
         self.aggressive_max = getattr(config, "extreme_aggressive_max", 1.50)  # $1.50 for great opportunities
+
+        # Trade type preferences (v2.5.0)
+        self.prefer_no_on_range = getattr(config, "prefer_no_on_range", True)
+        self.skip_yes_on_threshold = getattr(config, "skip_yes_on_threshold", False)
 
     def scan_for_opportunities(self, markets: List[WeatherMarket]) -> List[TradeSignal]:
         """Scan markets for extreme value opportunities.
@@ -73,8 +78,21 @@ class ExtremeValueStrategy:
             if no_signal:
                 signals.append(no_signal)
 
-        # Sort by expected value (best opportunities first)
-        signals.sort(key=lambda s: self._calculate_ev(s), reverse=True)
+        # v2.5.0: Sort with preference for NO on RANGE markets (proven 18.2% win rate)
+        # Range markets have "-B" in the market ID (bucket/range)
+        def sort_key(s: TradeSignal) -> tuple:
+            is_no_bet = s.token_id and "_NO" in str(s.token_id)
+            is_range = "-B" in s.market.market_id
+
+            # Priority: NO+RANGE > NO+THRESHOLD > YES+any
+            if self.prefer_no_on_range:
+                priority = 0 if (is_no_bet and is_range) else (1 if is_no_bet else 2)
+            else:
+                priority = 0  # No preference, just use EV
+
+            return (priority, -self._calculate_ev(s))  # Lower priority first, then higher EV
+
+        signals.sort(key=sort_key)
 
         return signals
 
@@ -91,6 +109,21 @@ class ExtremeValueStrategy:
 
         # Must be below maximum threshold
         if yes_price >= self.yes_max_price:
+            return None
+
+        # v2.5.0: Skip sub-3¢ trap trades (0% historical win rate)
+        if yes_price < self.yes_min_price:
+            self.logger.debug(
+                f"SKIP {market.market_id}: Price {yes_price:.1%} below minimum {self.yes_min_price:.1%} (sub-3¢ trap)"
+            )
+            return None
+
+        # v2.5.0: Check if this is a threshold market and if we should skip YES threshold bets
+        is_threshold_market = "-T" in market.market_id or "-T" in str(market.yes_token_id or "")
+        if self.skip_yes_on_threshold and is_threshold_market:
+            self.logger.debug(
+                f"SKIP {market.market_id}: YES on threshold market (skip_yes_on_threshold=True)"
+            )
             return None
 
         # Calculate position size based on how cheap it is
