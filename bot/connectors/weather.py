@@ -22,11 +22,7 @@ class WeatherConnector:
     def get_forecast(
         self, location: str, date: datetime, use_ensemble: bool = True
     ) -> Optional[WeatherForecast]:
-        """Get weather forecast with optional ensemble from multiple sources.
-
-        v2.5.0: Added prefer_nws_only mode - uses NWS exclusively when available
-        since Kalshi uses NWS station data for market resolution.
-        """
+        """Get weather forecast with optional ensemble from multiple sources."""
         # Check cache first
         cache_key = f"{location}_{date.date()}"
         if cache_key in self.cache:
@@ -34,25 +30,10 @@ class WeatherConnector:
             if (datetime.utcnow() - cached_time).total_seconds() < self.cache_ttl:
                 return forecast
 
-        forecast = None
-
-        # v2.5.0: Prefer NWS-only mode (Kalshi uses NWS for resolution)
-        prefer_nws = getattr(self.config, "prefer_nws_only", True)
-        if prefer_nws:
-            forecast = self._get_noaa_forecast(location, date)
-            if forecast:
-                # Got NWS data, use it exclusively
-                self.cache[cache_key] = (datetime.utcnow(), forecast)
-                return forecast
-            # NWS failed, fall through to ensemble/fallback
-
         if use_ensemble and self.config.enable_ensemble_models:
             forecast = self._get_ensemble_forecast(location, date)
         else:
-            # Try NWS first even in non-ensemble mode
-            forecast = self._get_noaa_forecast(location, date)
-            if not forecast:
-                forecast = self._get_openweather_forecast(location, date)
+            forecast = self._get_openweather_forecast(location, date)
 
         # Cache the result
         if forecast:
@@ -106,6 +87,8 @@ class WeatherConnector:
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _get_openweather_forecast(self, location: str, date: datetime) -> Optional[WeatherForecast]:
         """Get forecast from OpenWeatherMap API."""
+
+        print(f"Find forecast: {location} on {date}")
         try:
             # First, get coordinates for location
             geo_url = "https://api.openweathermap.org/geo/1.0/direct"
@@ -467,10 +450,8 @@ class WeatherConnector:
         from math import erf, sqrt
 
         # Weather forecast uncertainty - see calculate_range_probability() for detailed docs
-        # v2.5.0: Increased from 4.0 to 7.0 based on actual trading results
-        # Analysis showed forecast errors of 6-10°F in many cases, causing overconfident
-        # probability estimates (97% fair prob trades were losing)
-        std_dev = 7.0
+        # Using 4.0°F based on NWS verification data for 1-3 day forecasts
+        std_dev = 4.0
 
         if threshold_type == "high_temp_f":
             predicted = forecast.temp_high_f
@@ -543,17 +524,22 @@ class WeatherConnector:
 
         # Weather forecast uncertainty (standard deviation)
         #
-        # v2.5.0: Increased from 4.0 to 7.0 based on actual trading results
-        # Analysis showed forecast errors of 6-10°F, causing overconfident probabilities.
-        # With 4.0°F, a forecast 4°F away gave 84% confidence, but actual accuracy was ~15%.
+        # WHY 4.0°F?
+        # - NWS studies show 1-day temperature forecasts have RMSE of 2-3°F
+        # - 3-day forecasts have RMSE of 4-5°F
+        # - We use 4.0°F as a conservative middle ground because:
+        #   1. Kalshi markets often resolve 1-3 days out
+        #   2. Slight overestimate of uncertainty is safer (avoids overconfidence)
+        #   3. Matches observed forecast error in NOAA verification data
         #
-        # Original rationale (kept for reference):
-        # - NWS studies show 1-day forecasts have RMSE of 2-3°F, 3-day of 4-5°F
-        # - But real-world trading showed much larger effective errors
-        # - Possible causes: data source mismatch, measurement period differences
+        # Source: https://www.weather.gov/media/oun/wxtech/vxpage/VerifIntro.pdf
+        # See also: "The Quiet Revolution of Numerical Weather Prediction" (Bauer et al., 2015)
         #
-        # CALIBRATION: If win rate exceeds predictions, reduce std_dev; if lower, increase it.
-        std_dev = 7.0
+        # CALIBRATION NOTE: This value could be tuned based on:
+        # - Actual win rate vs predicted win rate from historical trades
+        # - If we're winning more than expected, std_dev is too high (reduce it)
+        # - If we're winning less than expected, std_dev is too low (increase it)
+        std_dev = 4.0
 
         # Calculate P(range_low <= temp < range_high) using normal CDF
         # P(a < X < b) = Phi((b - mu) / sigma) - Phi((a - mu) / sigma)
@@ -575,10 +561,11 @@ class WeatherConnector:
         - Ranges: "48-49°", "56° to 57°"
         - Thresholds: ">13°", "<13°", "above 70", "below 70"
         - Dates: "Jan 27, 2026", "MM/DD/YYYY", "YYYY-MM-DD"
+        - Celsius: "35°C" (converted to Fahrenheit)
 
         Returns:
             Dict with keys: location, threshold, threshold_type, date,
-                           range_low, range_high, is_range
+                           range_low, range_high, is_range, original_celsius
         """
         import re
         from datetime import datetime
@@ -587,10 +574,12 @@ class WeatherConnector:
             "location": None,
             "threshold": None,
             "threshold_type": None,
+            "threshold_direction": None,
             "date": None,
             "range_low": None,
             "range_high": None,
             "is_range": False,
+            "original_celsius": None,
         }
 
         # Extract location (common cities in weather markets)
@@ -650,10 +639,19 @@ class WeatherConnector:
                 result["location"] = city
                 break
 
-        # Determine if it's about high or low temp FIRST
-        if "low" in question_lower or "minimum" in question_lower:
+        # Determine if it's about high or low temp
+        # Use word boundaries to avoid "below" matching "low"
+        # Check for "lowest", "low temp", "low temperature", "minimum" for low temps
+        # Check for "highest", "high temp", "high temperature", "maximum" for high temps
+        low_patterns = [r'\blow\b', r'\blowest\b', r'\bminimum\b', r'\bmin\b']
+        high_patterns = [r'\bhigh\b', r'\bhighest\b', r'\bmaximum\b', r'\bmax\b']
+
+        is_low_temp = any(re.search(p, question_lower) for p in low_patterns)
+        is_high_temp = any(re.search(p, question_lower) for p in high_patterns)
+
+        if is_low_temp and not is_high_temp:
             result["threshold_type"] = "low_temp_f"
-        elif "high" in question_lower or "maximum" in question_lower:
+        elif is_high_temp:
             result["threshold_type"] = "high_temp_f"
         else:
             result["threshold_type"] = "high_temp_f"  # default
@@ -676,23 +674,64 @@ class WeatherConnector:
 
         # If no range found, check for threshold (>, <, above, below)
         if not result["is_range"]:
-            threshold_patterns = [
-                (r">\s*(-?\d+)°?", "above"),  # >13° or >-5°
-                (r"<\s*(-?\d+)°?", "below"),  # <13° or <-1°
-                (r"above\s+(-?\d+)", "above"),  # above 70 or above -10
-                (r"below\s+(-?\d+)", "below"),  # below 70 or below -5
-                (r"exceed\s+(-?\d+)", "above"),  # exceed 70
-                (r"(-?\d+)\s*°?[fF]", None),  # 70F or -5°F (generic)
-                (r"(-?\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
+            # First check for Celsius temperatures and convert to Fahrenheit
+            celsius_patterns = [
+                (r"(-?\d+)\s*°\s*[cC](?:\s+or\s+(below|higher|above))?", None),  # 35°C or 35°C or below
+                (r"be\s+(-?\d+)\s*°\s*[cC]", None),  # "be 35°C"
             ]
 
-            for pattern, direction in threshold_patterns:
+            celsius_found = False
+            for pattern, _ in celsius_patterns:
                 match = re.search(pattern, question)
                 if match:
-                    result["threshold"] = float(match.group(1))
-                    if direction:
-                        result["threshold_direction"] = direction
+                    celsius_temp = float(match.group(1))
+                    result["original_celsius"] = celsius_temp
+                    # Convert to Fahrenheit: F = C * 9/5 + 32
+                    result["threshold"] = celsius_temp * 9 / 5 + 32
+                    celsius_found = True
+                    # Check for direction in the match
+                    if match.lastindex and match.lastindex >= 2 and match.group(2):
+                        dir_word = match.group(2).lower()
+                        if dir_word in ("below",):
+                            result["threshold_direction"] = "below"
+                        elif dir_word in ("higher", "above"):
+                            result["threshold_direction"] = "above"
                     break
+
+            # If no Celsius found, check Fahrenheit patterns
+            if not celsius_found:
+                threshold_patterns = [
+                    (r">\s*(-?\d+)°?", "above"),  # >13° or >-5°
+                    (r"<\s*(-?\d+)°?", "below"),  # <13° or <-1°
+                    (r"above\s+(-?\d+)", "above"),  # above 70 or above -10
+                    (r"below\s+(-?\d+)", "below"),  # below 70 or below -5
+                    (r"exceed\s+(-?\d+)", "above"),  # exceed 70
+                    (r"(-?\d+)\s*°?\s*[fF]\s+or\s+(below|higher|above)", None),  # 32°F or below
+                    (r"(-?\d+)\s*°?\s*[fF]", None),  # 70F or -5°F (generic)
+                    (r"(-?\d+)\s*degrees?\s*[fF]", None),  # 70 degrees F
+                ]
+
+                for pattern, direction in threshold_patterns:
+                    match = re.search(pattern, question)
+                    if match:
+                        result["threshold"] = float(match.group(1))
+                        if direction:
+                            result["threshold_direction"] = direction
+                        # Check for "or below/higher" in the match groups
+                        elif match.lastindex and match.lastindex >= 2 and match.group(2):
+                            dir_word = match.group(2).lower()
+                            if dir_word in ("below",):
+                                result["threshold_direction"] = "below"
+                            elif dir_word in ("higher", "above"):
+                                result["threshold_direction"] = "above"
+                        break
+
+            # Also check for standalone "or below" / "or higher" after threshold
+            if result["threshold"] is not None and result["threshold_direction"] is None:
+                if re.search(r"\bor\s+below\b", question_lower):
+                    result["threshold_direction"] = "below"
+                elif re.search(r"\bor\s+(higher|above)\b", question_lower):
+                    result["threshold_direction"] = "above"
 
         # Extract date - support "Jan 27, 2026" format (Kalshi)
         month_map = {
@@ -700,19 +739,39 @@ class WeatherConnector:
             'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
         }
 
-        # Try "Jan 27, 2026" format first
+        # Try "Jan 27, 2026" format first (with year)
         month_date_match = re.search(
-            r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2}),?\s*(\d{4})",
+            r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s*(\d{4})",
             question_lower
         )
         if month_date_match:
             try:
-                month = month_map[month_date_match.group(1)]
+                month = month_map[month_date_match.group(1)[:3]]
                 day = int(month_date_match.group(2))
                 year = int(month_date_match.group(3))
                 result["date"] = datetime(year, month, day)
             except:
                 pass
+
+        # Try "January 31" format (without year - assume current/next year)
+        if not result["date"]:
+            month_date_no_year = re.search(
+                r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?!\s*,?\s*\d{4})",
+                question_lower
+            )
+            if month_date_no_year:
+                try:
+                    month = month_map[month_date_no_year.group(1)[:3]]
+                    day = int(month_date_no_year.group(2))
+                    # Use current year, or next year if the date has passed
+                    now = datetime.now()
+                    year = now.year
+                    target_date = datetime(year, month, day)
+                    if target_date < now:
+                        year += 1
+                    result["date"] = datetime(year, month, day)
+                except:
+                    pass
 
         # Fallback to other date patterns
         if not result["date"]:
